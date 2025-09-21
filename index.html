@@ -1,4 +1,23 @@
-<!DOCTYPE html>
+<div class="status-bar">
+            <div class="status-item">
+                <div class="status-indicator" id="dataStatus"></div>
+                <span id="dataStatusText">Google API 로딩 중...</span>
+            </div>
+            <div class="status-item">
+                <div class="status-indicator" id="priceStatus"></div>
+                <span id="priceStatusText">시세 계산 대기 중</span>
+            </div>
+            <div class="status-item">
+                <div class="status-indicator" id="analysisStatus"></div>
+                <span id="analysisStatusText">분석 준비</span>
+            </div>
+            <div class="status-item">
+                <span id="lastUpdateTime">마지막 업데이트: -</span>
+            </div>
+            <div class="status-item">
+                <button class="btn" onclick="signInGoogle()" id="googleSignInBtn" disabled>Google API 로딩 중...</button>
+            </div>
+        </div><!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -6,7 +25,25 @@
     <title>아르테일 거래 어뷰징 탐지 시스템</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <script async defer src="https://apis.google.com/js/api.js" onload="initGoogleAPI()"></script>
+    <script>
+        // Google API 동적 로딩
+        function loadGoogleAPI() {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://apis.google.com/js/api.js';
+                script.onload = () => {
+                    // gapi가 로드되었는지 확인
+                    if (typeof gapi !== 'undefined') {
+                        resolve();
+                    } else {
+                        reject(new Error('gapi 로드 실패'));
+                    }
+                };
+                script.onerror = () => reject(new Error('Google API 스크립트 로드 실패'));
+                document.head.appendChild(script);
+            });
+        }
+    </script>
     <style>
         * {
             margin: 0;
@@ -411,7 +448,7 @@
         <div class="status-bar">
             <div class="status-item">
                 <div class="status-indicator" id="dataStatus"></div>
-                <span id="dataStatusText">데이터 대기 중</span>
+                <span id="dataStatusText">데이터 업로드 대기 중</span>
             </div>
             <div class="status-item">
                 <div class="status-indicator" id="priceStatus"></div>
@@ -423,9 +460,6 @@
             </div>
             <div class="status-item">
                 <span id="lastUpdateTime">마지막 업데이트: -</span>
-            </div>
-            <div class="status-item">
-                <button class="btn" onclick="signInGoogle()" id="googleSignInBtn">🔑 Google 로그인</button>
             </div>
         </div>
         
@@ -712,34 +746,63 @@
             updateExchangeRateDisplay();
             updateOutlierDisplay();
             updateVariationDisplay();
-            // initializeGoogleAPI는 Google API 스크립트 로드 후 자동 호출됨
+            initializeGoogleAPI();
         });
         
-        // Google API 스크립트 로드 완료 후 호출되는 함수
-        function initGoogleAPI() {
-            gapi.load('client:auth2', function() {
-                gapi.client.init({
+        // Google API 초기화 (동적 로딩 방식)
+        async function initializeGoogleAPI() {
+            try {
+                updateStatus('dataStatus', 'loading', 'Google API 스크립트 로딩 중...');
+                
+                // Google API 스크립트 동적 로딩
+                await loadGoogleAPI();
+                
+                updateStatus('dataStatus', 'loading', 'Google API 초기화 중...');
+                
+                // gapi.load를 Promise로 래핑
+                await new Promise((resolve, reject) => {
+                    gapi.load('client:auth2', {
+                        callback: resolve,
+                        onerror: reject
+                    });
+                });
+                
+                updateStatus('dataStatus', 'loading', 'Google Client 설정 중...');
+                
+                // gapi.client.init 실행
+                await gapi.client.init({
                     apiKey: API_KEY,
                     clientId: CLIENT_ID,
                     discoveryDocs: [DISCOVERY_DOC],
                     scope: SCOPES
-                }).then(function() {
-                    isGoogleApiLoaded = true;
-                    updateStatus('dataStatus', 'success', 'Google Drive 연결 준비 완료');
-                    
-                    // 로그인 상태 확인
-                    const authInstance = gapi.auth2.getAuthInstance();
-                    if (authInstance.isSignedIn.get()) {
-                        updateStatus('dataStatus', 'success', 'Google Drive 연결됨');
-                    } else {
-                        updateStatus('dataStatus', 'loading', 'Google 로그인 필요');
-                    }
-                    
-                }).catch(function(error) {
-                    console.error('Google API 초기화 실패:', error);
-                    updateStatus('dataStatus', 'error', 'Google API 연결 실패');
                 });
-            });
+                
+                isGoogleApiLoaded = true;
+                updateStatus('dataStatus', 'success', 'Google Drive 연결 준비 완료');
+                
+                // 로그인 버튼 활성화
+                const loginBtn = document.getElementById('googleSignInBtn');
+                loginBtn.disabled = false;
+                loginBtn.textContent = '🔑 Google 로그인';
+                
+                // 로그인 상태 확인
+                const authInstance = gapi.auth2.getAuthInstance();
+                if (authInstance.isSignedIn.get()) {
+                    updateStatus('dataStatus', 'success', 'Google Drive 연결됨');
+                    loginBtn.textContent = '✅ 로그인됨';
+                } else {
+                    updateStatus('dataStatus', 'loading', 'Google 로그인 필요');
+                }
+                
+            } catch (error) {
+                console.error('Google API 초기화 실패:', error);
+                updateStatus('dataStatus', 'error', `Google API 연결 실패: ${error.message}`);
+                
+                // 로그인 버튼 비활성화 유지
+                const loginBtn = document.getElementById('googleSignInBtn');
+                loginBtn.disabled = true;
+                loginBtn.textContent = 'API 연결 실패';
+            }
         }
         
         // Google 로그인
