@@ -811,25 +811,35 @@
                 await loadGoogleAPIs();
                 updateStatus('dataStatus', 'loading', 'Google API 초기화 중...');
                 
-                // gapi 사용 가능할 때까지 대기
+                // gapi 사용 가능할 때까지 대기 (더 안정적인 방식)
                 let attempts = 0;
-                while (typeof gapi === 'undefined' && attempts < 20) {
+                while (attempts < 50) { // 25초까지 대기
+                    if (typeof gapi !== 'undefined' && gapi.load) {
+                        console.log('gapi 객체 확인됨');
+                        break;
+                    }
                     await new Promise(resolve => setTimeout(resolve, 500));
                     attempts++;
+                    console.log(`gapi 대기 중... ${attempts}/50`);
                 }
                 
-                if (typeof gapi === 'undefined') {
+                if (typeof gapi === 'undefined' || !gapi.load) {
                     throw new Error('Google API (gapi) 로드 타임아웃');
                 }
                 
                 // Google 객체 사용 가능할 때까지 대기
                 attempts = 0;
-                while (typeof google === 'undefined' && attempts < 20) {
+                while (attempts < 50) { // 25초까지 대기
+                    if (typeof google !== 'undefined' && google.accounts) {
+                        console.log('google 객체 확인됨');
+                        break;
+                    }
                     await new Promise(resolve => setTimeout(resolve, 500));
                     attempts++;
+                    console.log(`google 대기 중... ${attempts}/50`);
                 }
                 
-                if (typeof google === 'undefined') {
+                if (typeof google === 'undefined' || !google.accounts) {
                     throw new Error('Google Identity Services 로드 타임아웃');
                 }
                 
