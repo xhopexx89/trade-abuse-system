@@ -26,35 +26,8 @@
     <title>아르테일 거래 어뷰징 탐지 시스템</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <script>
-        // Google API 수동 로딩
-        function loadGoogleAPIs() {
-            return new Promise((resolve, reject) => {
-                // 첫 번째 스크립트: Google API
-                const gapiScript = document.createElement('script');
-                gapiScript.src = 'https://apis.google.com/js/api.js';
-                gapiScript.onload = function() {
-                    console.log('Google API 스크립트 로드 완료');
-                    
-                    // 두 번째 스크립트: Google Identity Services  
-                    const gisScript = document.createElement('script');
-                    gisScript.src = 'https://accounts.google.com/gsi/client';
-                    gisScript.onload = function() {
-                        console.log('Google Identity Services 스크립트 로드 완료');
-                        resolve();
-                    };
-                    gisScript.onerror = function() {
-                        reject(new Error('Google Identity Services 로드 실패'));
-                    };
-                    document.head.appendChild(gisScript);
-                };
-                gapiScript.onerror = function() {
-                    reject(new Error('Google API 스크립트 로드 실패'));
-                };
-                document.head.appendChild(gapiScript);
-            });
-        }
-    </script>
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
     <style>
         * {
             margin: 0;
@@ -731,19 +704,37 @@
         let gapiInited = false;
         let gisInited = false;
         
-        // Google 로그인 (간소화)
+        // Google 로그인 (수정된 버전)
         function signInGoogle() {
             if (!isGoogleApiLoaded) {
                 alert('Google API가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.');
                 return;
             }
             
-            if (gapi.client.getToken() === null) {
+            console.log('로그인 시도 시작');
+            
+            if (window.gapi.client.getToken() === null) {
                 // 새로운 토큰 요청
                 tokenClient.requestAccessToken({prompt: 'consent'});
             } else {
                 // 기존 토큰으로 새로운 토큰 요청
                 tokenClient.requestAccessToken({prompt: ''});
+            }
+        }
+        
+        // Google 로그아웃 (수정된 버전)
+        function signOutGoogle() {
+            const token = window.gapi.client.getToken();
+            if (token !== null) {
+                window.google.accounts.oauth2.revoke(token.access_token);
+                window.gapi.client.setToken('');
+                updateStatus('dataStatus', 'loading', 'Google 로그인 필요');
+                
+                const loginBtn = document.getElementById('googleSignInBtn');
+                const logoutBtn = document.getElementById('googleSignOutBtn');
+                loginBtn.textContent = '🔑 Google 로그인';
+                loginBtn.style.display = 'inline-block';
+                logoutBtn.style.display = 'none';
             }
         }
         
@@ -799,67 +790,57 @@
                 updateStatus('dataStatus', 'error', 'API 키가 설정되지 않음');
                 alert('Google Cloud Console에서 API 키와 클라이언트 ID를 발급받아 코드에 입력해주세요.');
             } else {
-                updateStatus('dataStatus', 'loading', 'Google API 스크립트 로딩 중...');
-                initializeGoogleAPI();
+                updateStatus('dataStatus', 'loading', 'Google API 초기화 대기 중...');
+                // 2초 후 초기화 시작 (스크립트 로딩 시간 확보)
+                setTimeout(initializeGoogleAPI, 2000);
             }
         });
         
-        // Google API 초기화
+        // Google API 초기화 (직접 접근 방식)
         async function initializeGoogleAPI() {
             try {
-                // Google API 스크립트 로딩
-                await loadGoogleAPIs();
-                updateStatus('dataStatus', 'loading', 'Google API 초기화 중...');
+                updateStatus('dataStatus', 'loading', 'Google API 확인 중...');
                 
-                // gapi 사용 가능할 때까지 대기 (더 안정적인 방식)
-                let attempts = 0;
-                while (attempts < 50) { // 25초까지 대기
-                    if (typeof gapi !== 'undefined' && gapi.load) {
-                        console.log('gapi 객체 확인됨');
-                        break;
-                    }
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    attempts++;
-                    console.log(`gapi 대기 중... ${attempts}/50`);
+                // window.gapi 확인
+                if (typeof window.gapi === 'undefined') {
+                    throw new Error('Google API (gapi)가 로드되지 않음');
                 }
                 
-                if (typeof gapi === 'undefined' || !gapi.load) {
-                    throw new Error('Google API (gapi) 로드 타임아웃');
+                if (typeof window.google === 'undefined') {
+                    throw new Error('Google Identity Services가 로드되지 않음');
                 }
                 
-                // Google 객체 사용 가능할 때까지 대기
-                attempts = 0;
-                while (attempts < 50) { // 25초까지 대기
-                    if (typeof google !== 'undefined' && google.accounts) {
-                        console.log('google 객체 확인됨');
-                        break;
-                    }
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    attempts++;
-                    console.log(`google 대기 중... ${attempts}/50`);
-                }
+                console.log('Google API 객체들 확인됨');
+                updateStatus('dataStatus', 'loading', 'Google Drive API 초기화 중...');
                 
-                if (typeof google === 'undefined' || !google.accounts) {
-                    throw new Error('Google Identity Services 로드 타임아웃');
-                }
-                
-                console.log('Google API 객체들 로드 완료');
-                
-                // gapi 클라이언트 초기화
+                // gapi.client 직접 초기화 (콜백 오류 방지)
                 await new Promise((resolve, reject) => {
-                    gapi.load('client', {
-                        callback: resolve,
-                        onerror: reject
-                    });
+                    const timeout = setTimeout(() => {
+                        reject(new Error('gapi.client 초기화 타임아웃'));
+                    }, 10000);
+                    
+                    try {
+                        window.gapi.client.init({
+                            apiKey: API_KEY,
+                            discoveryDocs: [DISCOVERY_DOC],
+                        }).then(() => {
+                            clearTimeout(timeout);
+                            console.log('gapi.client 초기화 성공');
+                            resolve();
+                        }).catch((error) => {
+                            clearTimeout(timeout);
+                            reject(error);
+                        });
+                    } catch (error) {
+                        clearTimeout(timeout);
+                        reject(error);
+                    }
                 });
                 
-                await gapi.client.init({
-                    apiKey: API_KEY,
-                    discoveryDocs: [DISCOVERY_DOC],
-                });
+                updateStatus('dataStatus', 'loading', 'OAuth 클라이언트 설정 중...');
                 
                 // Google Identity Services 토큰 클라이언트 초기화
-                tokenClient = google.accounts.oauth2.initTokenClient({
+                tokenClient = window.google.accounts.oauth2.initTokenClient({
                     client_id: CLIENT_ID,
                     scope: SCOPES,
                     callback: (resp) => {
@@ -868,6 +849,7 @@
                             return;
                         }
                         
+                        console.log('OAuth 로그인 성공');
                         updateStatus('dataStatus', 'success', 'Google Drive 연결됨');
                         const loginBtn = document.getElementById('googleSignInBtn');
                         const logoutBtn = document.getElementById('googleSignOutBtn');
@@ -875,6 +857,8 @@
                         logoutBtn.style.display = 'inline-block';
                     }
                 });
+                
+                console.log('토큰 클라이언트 생성 완료');
                 
                 isGoogleApiLoaded = true;
                 updateStatus('dataStatus', 'success', 'Google Drive 연결 준비 완료');
@@ -884,11 +868,15 @@
                 loginBtn.textContent = '🔑 Google 로그인';
                 
                 // 기존 토큰이 있는지 확인
-                if (gapi.client.getToken() !== null) {
-                    updateStatus('dataStatus', 'success', 'Google Drive 연결됨');
-                    const logoutBtn = document.getElementById('googleSignOutBtn');
-                    loginBtn.style.display = 'none';
-                    logoutBtn.style.display = 'inline-block';
+                try {
+                    if (window.gapi.client.getToken() !== null) {
+                        updateStatus('dataStatus', 'success', 'Google Drive 연결됨');
+                        const logoutBtn = document.getElementById('googleSignOutBtn');
+                        loginBtn.style.display = 'none';
+                        logoutBtn.style.display = 'inline-block';
+                    }
+                } catch (e) {
+                    // getToken 에러는 무시 (아직 로그인하지 않음)
                 }
                 
             } catch (error) {
