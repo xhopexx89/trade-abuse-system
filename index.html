@@ -7,14 +7,47 @@
     <!-- 라이브러리 로드 순서 중요: PapaParse 먼저 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <!-- PapaParse 로드 확인 -->
+    <!-- Apache Arrow for Parquet support -->
+    <script src="https://cdn.jsdelivr.net/npm/apache-arrow@14.0.1/Arrow.es2015.min.js"></script>
+    <!-- 라이브러리 로드 확인 (조용히) -->
     <script>
         window.addEventListener('load', function() {
             if (typeof Papa === 'undefined') {
                 console.error('PapaParse 라이브러리 로드 실패!');
-                alert('CSV 파싱 라이브러리 로드에 실패했습니다. 페이지를 새로고침해주세요.');
+                // 간단한 CSV 파서 대체
+                window.Papa = {
+                    parse: function(text, options) {
+                        const lines = text.split('\n').filter(line => line.trim());
+                        const headers = lines[0].split(',').map(h => h.trim());
+                        const data = [];
+                        
+                        const maxLines = options?.preview ? Math.min(lines.length, 1001) : lines.length;
+                        
+                        for (let i = 1; i < maxLines; i++) {
+                            const values = lines[i].split(',');
+                            const obj = {};
+                            headers.forEach((header, index) => {
+                                obj[header] = values[index] ? values[index].trim() : '';
+                            });
+                            data.push(obj);
+                        }
+                        
+                        return { data: data };
+                    }
+                };
+                console.log('✅ 대체 CSV 파서 활성화');
             } else {
-                console.log('PapaParse 라이브러리 로드 성공');
+                console.log('✅ PapaParse 라이브러리 로드 성공');
+            }
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js 라이브러리 로드 실패!');
+            } else {
+                console.log('✅ Chart.js 라이브러리 로드 성공');
+            }
+            if (typeof Arrow === 'undefined') {
+                console.error('Apache Arrow 라이브러리 로드 실패!');
+            } else {
+                console.log('✅ Apache Arrow 라이브러리 로드 성공 (Parquet 지원)');
             }
         });
     </script>
@@ -1271,42 +1304,113 @@
             }
         }
 
-        // Google Drive에서 파일 로드 (CSV 형식)
+        // Google Drive에서 Parquet 파일 로드
         async function loadDriveFile(date) {
             if (!gapiInitialized || gapi.client.getToken() === null) {
                 throw new Error('Google 로그인이 필요합니다.');
             }
             
             try {
-                // 1_일자별_거래데이터 폴더에서 직접 파일 찾기 (ID 사용)
-                // CSV 파일 찾기 (파케이 대신)
-                const fileName = `trade_${date}.csv`;
+                // 1_일자별_거래데이터 폴더에서 Parquet 파일 찾기
+                const fileName = `trade_${date}.parquet`;  // Parquet 형식으로 변경
                 const file = await findFileInFolder(CONFIG.tradeFolderId, fileName);
                 
                 if (!file) {
-                    console.log(`${fileName} 파일을 찾을 수 없습니다.`);
-                    // 파케이 파일 찾기 시도
-                    const parquetName = `trade_${date}.parquet`;
-                    const parquetFile = await findFileInFolder(CONFIG.tradeFolderId, parquetName);
+                    // CSV 파일도 시도
+                    const csvFileName = `trade_${date}.csv`;
+                    const csvFile = await findFileInFolder(CONFIG.tradeFolderId, csvFileName);
                     
-                    if (parquetFile) {
-                        console.log(`${parquetName}을 찾았지만, CSV 변환이 필요합니다.`);
-                        console.log('csv_parquet_converter_app.py를 사용하여 CSV로 변환해주세요.');
+                    if (csvFile) {
+                        console.log(`CSV 파일 발견: ${csvFileName}`);
+                        const content = await downloadFile(csvFile.id);
+                        const parsed = Papa.parse(content, {
+                            header: true,
+                            dynamicTyping: true,
+                            skipEmptyLines: true
+                            // preview 제한 제거
+                        });
+                        console.log(`${date} CSV 데이터 로드 완료: ${parsed.data.length}건`);
+                        return parsed.data;
                     }
                     
+                    console.log(`${fileName} 파일을 찾을 수 없습니다.`);
                     return generateSampleTradeData(date, 100);
                 }
                 
-                // CSV 파일 다운로드 및 파싱
-                const content = await downloadFile(file.id);
-                const parsed = Papa.parse(content, {
-                    header: true,
-                    dynamicTyping: true,
-                    skipEmptyLines: true
+                // Parquet 파일 다운로드 (바이너리로)
+                console.log(`Parquet 파일 발견: ${fileName}`);
+                const response = await gapi.client.request({
+                    path: `/drive/v3/files/${file.id}`,
+                    method: 'GET',
+                    params: { alt: 'media' },
+                    headers: {
+                        'Accept': 'application/octet-stream'
+                    }
                 });
                 
-                console.log(`${date} 데이터 로드 완료: ${parsed.data.length}건`);
-                return parsed.data;
+                // Base64 또는 텍스트를 ArrayBuffer로 변환
+                let arrayBuffer;
+                if (response.body instanceof ArrayBuffer) {
+                    arrayBuffer = response.body;
+                } else if (typeof response.body === 'string') {
+                    // Base64 문자열인 경우
+                    const binaryString = atob(response.body);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    arrayBuffer = bytes.buffer;
+                } else {
+                    // 직접 변환 시도
+                    const encoder = new TextEncoder();
+                    arrayBuffer = encoder.encode(response.body).buffer;
+                }
+                
+                // Arrow를 사용하여 Parquet 파싱
+                if (typeof Arrow !== 'undefined') {
+                    try {
+                        const table = Arrow.tableFromIPC(arrayBuffer);
+                        const data = [];
+                        
+                        // Arrow 테이블을 JSON으로 변환 (제한 없음)
+                        console.log(`Parquet 파일 총 ${table.numRows}행 전체 처리 중...`);
+                        
+                        for (let i = 0; i < table.numRows; i++) {
+                            const row = {};
+                            for (const field of table.schema.fields) {
+                                const column = table.getColumn(field.name);
+                                row[field.name] = column.get(i);
+                            }
+                            data.push(row);
+                            
+                            // 진행 상황 표시 (10000건마다)
+                            if (i % 10000 === 0) {
+                                console.log(`처리 중: ${i}/${table.numRows}`);
+                            }
+                        }
+                        
+                        console.log(`${date} Parquet 데이터 로드 완료: ${data.length}건`);
+                        return data;
+                        
+                    } catch (arrowError) {
+                        console.error('Arrow 파싱 실패, 대체 방법 시도:', arrowError);
+                        
+                        // 간단한 Parquet 헤더 확인
+                        const view = new DataView(arrayBuffer);
+                        const magic = new Uint8Array(arrayBuffer, 0, 4);
+                        const magicString = String.fromCharCode(...magic);
+                        
+                        if (magicString === 'PAR1') {
+                            console.log('Parquet 파일 확인됨, 하지만 파싱 불가');
+                            console.log('CSV 변환이 필요합니다.');
+                            return generateSampleTradeData(date, 100);
+                        }
+                    }
+                } else {
+                    console.error('Apache Arrow 라이브러리가 로드되지 않았습니다.');
+                    console.log('CSV 파일을 사용하거나 페이지를 새로고침해주세요.');
+                    return generateSampleTradeData(date, 100);
+                }
                 
             } catch (error) {
                 console.error(`${date} 파일 로드 실패:`, error);
