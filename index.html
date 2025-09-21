@@ -773,51 +773,98 @@
             }
         }
 
-        // Google API 스크립트 수동 로딩 (순차적)
+        // Google API 스크립트 로딩 방식 변경 (onload 콜백 사용)
         function loadGoogleAPIs() {
             return new Promise((resolve, reject) => {
+                console.log('Google API 스크립트 로딩 시작');
+                
+                // 첫 번째: Google API 로드
                 const gapiScript = document.createElement('script');
                 gapiScript.src = 'https://apis.google.com/js/api.js';
+                
                 gapiScript.onload = function() {
                     console.log('Google API 스크립트 로드 완료');
                     
-                    const gisScript = document.createElement('script');
-                    gisScript.src = 'https://accounts.google.com/gsi/client';
-                    gisScript.onload = function() {
-                        console.log('Google Identity Services 스크립트 로드 완료');
-                        resolve();
+                    // gapi 객체가 실제로 사용 가능할 때까지 대기
+                    let gapiReady = false;
+                    let attempts = 0;
+                    
+                    const checkGapiReady = () => {
+                        if (typeof window.gapi !== 'undefined' && window.gapi.load) {
+                            console.log('gapi 객체 준비 완료');
+                            gapiReady = true;
+                            
+                            // 두 번째: Google Identity Services 로드
+                            const gisScript = document.createElement('script');
+                            gisScript.src = 'https://accounts.google.com/gsi/client';
+                            gisScript.onload = function() {
+                                console.log('Google Identity Services 스크립트 로드 완료');
+                                resolve();
+                            };
+                            gisScript.onerror = function() {
+                                reject(new Error('Google Identity Services 로드 실패'));
+                            };
+                            document.head.appendChild(gisScript);
+                            return;
+                        }
+                        
+                        attempts++;
+                        if (attempts > 40) { // 20초 타임아웃
+                            reject(new Error('gapi 객체 초기화 타임아웃'));
+                            return;
+                        }
+                        
+                        setTimeout(checkGapiReady, 500);
                     };
-                    gisScript.onerror = function() {
-                        reject(new Error('Google Identity Services 로드 실패'));
-                    };
-                    document.head.appendChild(gisScript);
+                    
+                    // 즉시 확인 시작
+                    checkGapiReady();
                 };
+                
                 gapiScript.onerror = function() {
                     reject(new Error('Google API 스크립트 로드 실패'));
                 };
+                
                 document.head.appendChild(gapiScript);
             });
         }
 
-        // gapi 로드 대기 (문서 해결책 적용)
+        // gapi 로드 대기 (더 안정적인 방식)
         function waitForGapi() {
             return new Promise((resolve, reject) => {
+                // 이미 로드되어 있으면 바로 해결
+                if (typeof window.gapi !== 'undefined' && window.gapi.load) {
+                    console.log('gapi 이미 로드됨');
+                    resolve();
+                    return;
+                }
+                
                 let attempts = 0;
+                const maxAttempts = 60; // 30초로 연장
+                
                 const checkGapi = () => {
-                    if (typeof gapi !== 'undefined' && gapi.load) {
-                        console.log('gapi 객체 확인됨');
+                    console.log(`gapi 확인 시도 ${attempts + 1}/${maxAttempts}`);
+                    
+                    // window.gapi로 명시적 접근
+                    if (typeof window.gapi !== 'undefined' && 
+                        window.gapi && 
+                        typeof window.gapi.load === 'function') {
+                        console.log('gapi 객체 사용 가능 확인됨');
                         resolve();
                         return;
                     }
                     
                     attempts++;
-                    if (attempts >= 50) { // 25초 타임아웃
+                    if (attempts >= maxAttempts) {
+                        console.error('gapi 타임아웃 - window.gapi:', typeof window.gapi);
                         reject(new Error('gapi 로드 타임아웃'));
                         return;
                     }
                     
                     setTimeout(checkGapi, 500);
                 };
+                
+                // 즉시 첫 번째 확인
                 checkGapi();
             });
         }
