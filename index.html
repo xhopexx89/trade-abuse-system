@@ -3,64 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>아르테일 거래 어뷰징 탐지 시스템</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <title>거래 어뷰징 탐지 시스템</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 10px;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
         }
-        
-        /* 로딩 단계 스타일 */
-        .loading-container {
-            max-width: 600px;
-            margin: 100px auto;
+        .container {
             background: white;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
-            text-align: center;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-        
-        .loading-container h1 {
-            color: #2c3e50;
-            margin-bottom: 30px;
-        }
-        
         .status {
             padding: 15px;
             margin: 10px 0;
             border-radius: 8px;
             font-weight: 500;
         }
-        
         .status.loading {
             background-color: #fff3cd;
             border-left: 4px solid #ffc107;
             color: #856404;
         }
-        
         .status.success {
             background-color: #d4edda;
             border-left: 4px solid #28a745;
             color: #155724;
         }
-        
         .status.error {
             background-color: #f8d7da;
             border-left: 4px solid #dc3545;
             color: #721c24;
         }
-        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px 5px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .main-content {
+            display: none;
+            margin-top: 30px;
+        }
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            background: #fafafa;
+            transition: all 0.3s ease;
+        }
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
         .progress-bar {
             width: 100%;
             height: 8px;
@@ -69,754 +86,246 @@
             overflow: hidden;
             margin: 10px 0;
         }
-        
         .progress-fill {
             height: 100%;
             background: linear-gradient(90deg, #667eea, #764ba2);
             transition: width 0.3s ease;
             width: 0%;
         }
-        
-        .btn {
-            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            margin: 10px 5px;
-        }
-        
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
-        }
-        
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
-        .btn.success {
-            background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
-        }
-        
-        .btn.danger {
-            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-        }
-        
-        /* 메인 시스템 스타일 (숨겨짐) */
-        .main-system {
-            display: none;
-            max-width: 1800px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 2.8rem;
-            margin-bottom: 10px;
-        }
-        
-        .header p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-        }
-        
-        .status-bar {
+        .debug-info {
             background: #f8f9fa;
-            padding: 15px 30px;
-            border-bottom: 1px solid #e9ecef;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        
-        .status-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: white;
-            padding: 8px 15px;
-            border-radius: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        
-        .status-indicator {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #27ae60;
-        }
-        
-        .status-indicator.loading {
-            background: #f39c12;
-            animation: pulse 1.5s infinite;
-        }
-        
-        .status-indicator.error {
-            background: #e74c3c;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        
-        .main-content {
-            padding: 30px;
-        }
-        
-        .tab-container {
-            display: flex;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #ecf0f1;
-            overflow-x: auto;
-        }
-        
-        .tab {
-            padding: 15px 25px;
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 1.1rem;
-            color: #7f8c8d;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s ease;
-            white-space: nowrap;
-        }
-        
-        .tab.active {
-            color: #2c3e50;
-            border-bottom-color: #3498db;
-            font-weight: 600;
-        }
-        
-        .tab:hover {
-            color: #2c3e50;
-            background: #f8f9fa;
-        }
-        
-        .tab-content {
-            display: none;
-        }
-        
-        .tab-content.active {
-            display: block;
-        }
-        
-        .grid {
-            display: grid;
-            gap: 20px;
-        }
-        
-        .grid-2 {
-            grid-template-columns: 1fr 1fr;
-        }
-        
-        .grid-3 {
-            grid-template-columns: 1fr 1fr 1fr;
-        }
-        
-        .card {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-            border: 1px solid #ecf0f1;
-            transition: all 0.3s ease;
-        }
-        
-        .card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-        }
-        
-        .card h3 {
-            color: #2c3e50;
-            margin-bottom: 15px;
-            font-size: 1.3rem;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .input-group {
-            margin-bottom: 20px;
-        }
-        
-        .input-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #2c3e50;
-        }
-        
-        .input-group input, .input-group textarea, .input-group select {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #ecf0f1;
-            border-radius: 10px;
-            font-size: 1rem;
-            transition: border-color 0.3s ease;
-        }
-        
-        .input-group input:focus, .input-group textarea:focus, .input-group select:focus {
-            outline: none;
-            border-color: #3498db;
-        }
-        
-        .metric-card {
-            text-align: center;
-            padding: 20px;
-            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-            color: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(52, 152, 219, 0.3);
-        }
-        
-        .metric-value {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        
-        .metric-label {
-            font-size: 0.9rem;
-            opacity: 0.9;
-        }
-        
-        .results-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-            background: white;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        
-        .results-table th {
-            background: #34495e;
-            color: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
             padding: 15px;
-            text-align: left;
-            font-weight: 600;
-        }
-        
-        .results-table td {
-            padding: 12px 15px;
-            border-bottom: 1px solid #ecf0f1;
-        }
-        
-        .results-table tr:hover {
-            background: #f8f9fa;
-        }
-        
-        .risk-high {
-            background: #ffe6e6 !important;
-            border-left: 4px solid #e74c3c;
-        }
-        
-        .risk-medium {
-            background: #fff9e6 !important;
-            border-left: 4px solid #f39c12;
-        }
-        
-        .risk-low {
-            background: #e6f3ff !important;
-            border-left: 4px solid #3498db;
-        }
-        
-        .tag {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            margin: 2px;
-        }
-        
-        .tag.danger {
-            background: #ffe6e6;
-            color: #e74c3c;
-        }
-        
-        .tag.warning {
-            background: #fff9e6;
-            color: #f39c12;
-        }
-        
-        .tag.info {
-            background: #e6f3ff;
-            color: #3498db;
-        }
-        
-        .loading-spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #3498db;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .date-range-picker {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        
-        .chart-container {
-            position: relative;
-            height: 300px;
             margin: 20px 0;
-        }
-        
-        @media (max-width: 768px) {
-            .grid-2, .grid-3 {
-                grid-template-columns: 1fr;
-            }
-            
-            .header h1 {
-                font-size: 2rem;
-            }
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
         }
     </style>
 </head>
 <body>
-    <!-- 1단계: Google API 로딩 화면 -->
-    <div id="loading-stage" class="loading-container">
-        <h1>🛡️ 아르테일 거래 어뷰징 탐지 시스템</h1>
-        <p>시스템을 초기화하고 있습니다...</p>
+    <div class="container">
+        <h1>🎮 거래 어뷰징 탐지 시스템</h1>
         
-        <div id="init-status" class="status loading">
-            🔄 Google API 초기화 중...
+        <div id="status-container">
+            <div id="init-status" class="status loading">
+                🔄 Google API 초기화 중...
+            </div>
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
         </div>
-        
-        <div class="progress-bar">
-            <div id="progress-fill" class="progress-fill"></div>
+
+        <div id="debug-info" class="debug-info" style="display: none;">
+            <h4>🔍 디버그 정보</h4>
+            <div id="debug-content"></div>
         </div>
-        
+
         <div id="auth-section" style="display: none;">
-            <button id="auth-button" class="btn">🔐 Google 로그인</button>
-            <button id="signout-button" class="btn danger" style="display: none;">🚪 로그아웃</button>
+            <button id="auth-button">🔐 Google 로그인</button>
+            <button id="signout-button" style="display: none;">🚪 로그아웃</button>
         </div>
-    </div>
-    
-    <!-- 2단계: 메인 시스템 (로딩 완료 후 표시) -->
-    <div id="main-stage" class="main-system">
-        <div class="header">
-            <h1>🛡️ 아르테일 거래 어뷰징 탐지 시스템</h1>
-            <p>실시간 거래 분석 및 어뷰징 패턴 탐지</p>
-        </div>
-        
-        <div class="status-bar">
-            <div class="status-item">
-                <div class="status-indicator" id="dataStatus"></div>
-                <span id="dataStatusText">Google Drive 연결됨</span>
-            </div>
-            <div class="status-item">
-                <div class="status-indicator" id="priceStatus"></div>
-                <span id="priceStatusText">시세 계산 대기 중</span>
-            </div>
-            <div class="status-item">
-                <div class="status-indicator" id="analysisStatus"></div>
-                <span id="analysisStatusText">분석 준비</span>
-            </div>
-            <div class="status-item">
-                <span id="lastUpdateTime">마지막 업데이트: -</span>
-            </div>
-            <div class="status-item">
-                <button class="btn danger" onclick="signOutGoogle()" id="googleSignOutBtn">로그아웃</button>
-            </div>
-        </div>
-        
-        <div class="main-content">
-            <div class="tab-container">
-                <button class="tab active" onclick="showTab('dashboard')">📊 대시보드</button>
-                <button class="tab" onclick="showTab('data-load')">📁 데이터 로드</button>
-                <button class="tab" onclick="showTab('price-analysis')">💰 시세 분석</button>
-                <button class="tab" onclick="showTab('abuse-detection')">🔍 어뷰징 탐지</button>
-                <button class="tab" onclick="showTab('sanctions')">⚖️ 제재 관리</button>
-                <button class="tab" onclick="showTab('appeals')">📋 이의제기 처리</button>
-                <button class="tab" onclick="showTab('settings')">⚙️ 설정</button>
+
+        <div id="main-content" class="main-content">
+            <h2>📊 CSV 파일 업로드 및 분석</h2>
+            <div class="upload-area" id="upload-area">
+                <p>🗂️ 거래 로그 CSV 파일을 여기에 드래그하거나 클릭하여 선택하세요</p>
+                <input type="file" id="csv-upload" accept=".csv" style="display: none;">
             </div>
             
-            <!-- 대시보드 탭 -->
-            <div id="dashboard" class="tab-content active">
-                <div class="grid grid-3">
-                    <div class="metric-card">
-                        <div class="metric-value" id="totalTrades">0</div>
-                        <div class="metric-label">총 거래 수</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-value" id="suspiciousTrades">0</div>
-                        <div class="metric-label">의심 거래</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-value" id="flaggedUsers">0</div>
-                        <div class="metric-label">의심 유저</div>
-                    </div>
-                </div>
-                
-                <div class="grid grid-2" style="margin-top: 30px;">
-                    <div class="card">
-                        <h3>📈 거래량 추이</h3>
-                        <div class="chart-container">
-                            <canvas id="tradeVolumeChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <h3>🎯 어뷰징 탐지 현황</h3>
-                        <div class="chart-container">
-                            <canvas id="abuseDetectionChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 데이터 로드 탭 -->
-            <div id="data-load" class="tab-content">
-                <div class="grid grid-2">
-                    <div class="card">
-                        <h3>📁 거래 데이터 로드</h3>
-                        <div class="date-range-picker">
-                            <label>시작일:</label>
-                            <input type="date" id="startDate" value="2025-09-16">
-                            <label>종료일:</label>
-                            <input type="date" id="endDate" value="2025-09-16">
-                        </div>
-                        <button class="btn" onclick="loadTradeData()">
-                            <span class="loading-spinner" id="loadSpinner" style="display: none;"></span>
-                            거래 데이터 로드
-                        </button>
-                        <div class="progress-bar" id="loadProgress" style="display: none;">
-                            <div class="progress-fill" id="loadProgressFill"></div>
-                        </div>
-                        <div id="loadResults" style="margin-top: 20px;"></div>
-                    </div>
-                    
-                    <div class="card">
-                        <h3>📊 참고 데이터 관리</h3>
-                        <div class="input-group">
-                            <label>핵로그 유저 리스트 (CSV)</label>
-                            <input type="file" id="hackUserFile" accept=".csv" onchange="loadHackUsers()">
-                        </div>
-                        <div class="input-group">
-                            <label>마켓시세 데이터 (CSV)</label>
-                            <input type="file" id="marketPriceFile" accept=".csv" onchange="loadMarketPrices()">
-                        </div>
-                        <div class="input-group">
-                            <label>아이템 정보 시트 (CSV)</label>
-                            <input type="file" id="itemInfoFile" accept=".csv" onchange="loadItemInfo()">
-                        </div>
-                        <div id="referenceDataStatus" style="margin-top: 20px;"></div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 시세 분석 탭 -->
-            <div id="price-analysis" class="tab-content">
-                <div class="card">
-                    <h3>💱 눈 결정 뿌리기 환율 분석</h3>
-                    <button class="btn" onclick="calculateSnowExchangeRate()">환율 계산</button>
-                    <div id="snowRateResults" style="margin-top: 20px;"></div>
-                </div>
-                
-                <div class="grid grid-2" style="margin-top: 20px;">
-                    <div class="card">
-                        <h3>📈 일간 시세</h3>
-                        <div class="input-group">
-                            <label>분석 날짜</label>
-                            <input type="date" id="dailyPriceDate" value="2025-09-16">
-                        </div>
-                        <button class="btn" onclick="calculateDailyPrices()">일간 시세 계산</button>
-                        <div id="dailyPriceResults" style="margin-top: 20px;"></div>
-                    </div>
-                    
-                    <div class="card">
-                        <h3>📊 주간 시세</h3>
-                        <div class="input-group">
-                            <label>기준 주</label>
-                            <input type="week" id="weeklyPriceWeek">
-                        </div>
-                        <button class="btn" onclick="calculateWeeklyPrices()">주간 시세 계산</button>
-                        <div id="weeklyPriceResults" style="margin-top: 20px;"></div>
-                    </div>
-                </div>
-                
-                <div class="card" style="margin-top: 20px;">
-                    <h3>🎯 시세 검색</h3>
-                    <div class="input-group">
-                        <label>아이템명 검색</label>
-                        <input type="text" id="itemSearch" placeholder="아이템명을 입력하세요">
-                    </div>
-                    <button class="btn" onclick="searchItemPrices()">시세 검색</button>
-                    <div id="itemSearchResults" style="margin-top: 20px;"></div>
-                </div>
-            </div>
-            
-            <!-- 어뷰징 탐지 탭 -->
-            <div id="abuse-detection" class="tab-content">
-                <div class="card">
-                    <h3>🔍 유저 분석</h3>
-                    <div class="input-group">
-                        <label>유저 ID (여러 개 입력 시 쉼표로 구분)</label>
-                        <textarea id="userIds" placeholder="예: 20372100005661359, 20372100007855395" rows="3"></textarea>
-                    </div>
-                    <div class="grid grid-2">
-                        <div class="input-group">
-                            <label>분석 필터</label>
-                            <select id="analysisFilter">
-                                <option value="all">모든 거래</option>
-                                <option value="hack_related">핵로그 유저 관련</option>
-                                <option value="high_value">고가 거래</option>
-                                <option value="suspicious_pattern">의심 패턴</option>
-                            </select>
-                        </div>
-                        <div class="input-group">
-                            <label>분석 기간 (일)</label>
-                            <input type="number" id="analysisPeriod" value="7" min="1" max="30">
-                        </div>
-                    </div>
-                    <button class="btn" onclick="analyzeUsers()">🔍 분석 시작</button>
-                </div>
-                
-                <div id="analysisResults" style="display: none; margin-top: 20px;">
-                    <div class="card">
-                        <h3>📋 분석 결과</h3>
-                        <div id="analysisContent"></div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 제재 관리 탭 -->
-            <div id="sanctions" class="tab-content">
-                <div class="card">
-                    <h3>⚖️ 제재 대상 관리</h3>
-                    <div class="grid grid-2">
-                        <button class="btn success" onclick="exportSanctionList()">📤 제재 목록 내보내기</button>
-                        <button class="btn danger" onclick="clearSanctions()">🗑️ 제재 목록 초기화</button>
-                    </div>
-                    <div id="sanctionsList" style="margin-top: 20px;"></div>
-                </div>
-            </div>
-            
-            <!-- 이의제기 처리 탭 -->
-            <div id="appeals" class="tab-content">
-                <div class="card">
-                    <h3>📋 이의제기 처리</h3>
-                    <div class="input-group">
-                        <label>이의제기 유저 ID (여러 개 입력 시 쉼표로 구분)</label>
-                        <textarea id="appealUserIds" placeholder="예: 20372100005661359, 20372100007855395" rows="3"></textarea>
-                    </div>
-                    <button class="btn" onclick="processAppeals()">📋 제재 근거 조회</button>
-                    
-                    <div id="appealResults" style="display: none; margin-top: 20px;">
-                        <div class="card">
-                            <h3>🔍 제재 근거 조회 결과</h3>
-                            <div id="appealContent"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 설정 탭 -->
-            <div id="settings" class="tab-content">
-                <div class="grid grid-2">
-                    <div class="card">
-                        <h3>🎯 어뷰징 탐지 설정</h3>
-                        <div class="input-group">
-                            <label>가치 불균형 임계값 (배수)</label>
-                            <input type="range" id="valueImbalanceThreshold" min="2" max="50" value="10" oninput="updateThresholdDisplay()">
-                            <span id="valueImbalanceDisplay">10배</span>
-                        </div>
-                        <div class="input-group">
-                            <label>몰아주기 최소 횟수</label>
-                            <input type="number" id="giftingMinCount" value="3" min="1" max="10">
-                        </div>
-                        <div class="input-group">
-                            <label>몰아주기 최소 금액 (메소)</label>
-                            <input type="number" id="giftingMinValue" value="1000000" step="100000">
-                        </div>
-                        <div class="input-group">
-                            <label>환율 조작 감지 범위 (%)</label>
-                            <input type="range" id="exchangeRateRange" min="10" max="50" value="30" oninput="updateExchangeRateDisplay()">
-                            <span id="exchangeRateDisplay">±30%</span>
-                        </div>
-                        <button class="btn success" onclick="saveSettings()">💾 설정 저장</button>
-                    </div>
-                    
-                    <div class="card">
-                        <h3>📊 시세 계산 설정</h3>
-                        <div class="input-group">
-                            <label>최소 거래량 (일간)</label>
-                            <input type="number" id="minDailyTrades" value="5" min="1">
-                        </div>
-                        <div class="input-group">
-                            <label>최소 거래량 (주간)</label>
-                            <input type="number" id="minWeeklyTrades" value="3" min="1">
-                        </div>
-                        <div class="input-group">
-                            <label>극단값 제거 비율 (%)</label>
-                            <input type="range" id="outlierRemovalRate" min="5" max="20" value="10" oninput="updateOutlierDisplay()">
-                            <span id="outlierDisplay">10%</span>
-                        </div>
-                        <div class="input-group">
-                            <label>시세 변동 허용 범위 (%)</label>
-                            <input type="range" id="priceVariationRange" min="20" max="100" value="50" oninput="updateVariationDisplay()">
-                            <span id="variationDisplay">50%</span>
-                        </div>
-                        <button class="btn success" onclick="savePriceSettings()">💾 설정 저장</button>
-                    </div>
-                </div>
+            <div id="analysis-results" style="display: none;">
+                <h3>분석 결과</h3>
+                <div id="results-content"></div>
             </div>
         </div>
     </div>
 
-    <!-- Google API 스크립트 (기존 성공한 방식) -->
+    <!-- Google API 스크립트 로드 -->
     <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 
     <script>
-        // Google API 설정
-        const API_KEY = 'AIzaSyAHsYN91Ul4TSRkR9ILwyugAuBlTq0BFpQ';
-        const CLIENT_ID = '248542083622-3k0q7552uso1006bffs68sb27ujidd1f.apps.googleusercontent.com';
-        const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
-        const SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/spreadsheets';
-        
-        let gapi;
-        let google;
-        let tokenClient;
-        let gapiInited = false;
-        let gisInited = false;
-        
-        // 전역 변수 (메인 시스템용)
-        let tradeData = [];
-        let hackUsers = new Set();
-        let marketPrices = new Map();
-        let itemInfo = new Map();
-        let dailyPrices = new Map();
-        let weeklyPrices = new Map();
-        let snowToMesoRate = 0;
-        let flaggedTrades = new Set();
-        let processedDates = new Set();
-        
-        // 설정값
-        let settings = {
-            valueImbalanceThreshold: 10,
-            giftingMinCount: 3,
-            giftingMinValue: 1000000,
-            exchangeRateRange: 0.3,
-            minDailyTrades: 5,
-            minWeeklyTrades: 3,
-            outlierRemovalRate: 0.1,
-            priceVariationRange: 0.5
+        // 설정
+        const CONFIG = {
+            clientId: '248542083622-3k0q7552uso1006bffs68sb27ujidd1f.apps.googleusercontent.com',
+            apiKey: 'AIzaSyAHsYN91Ul4TSRkR9ILwyugAuBlTq0BFpQ',
+            discoveryDocs: [
+                'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest',
+                'https://sheets.googleapis.com/$discovery/rest?version=v4'
+            ],
+            scopes: [
+                'https://www.googleapis.com/auth/drive.file',
+                'https://www.googleapis.com/auth/spreadsheets'
+            ]
         };
 
-        // ✅ 1단계: 간단한 Google API 초기화 (기존 성공한 방식)
-        function gapiLoaded() {
-            gapi.load('client', initializeGapiClient);
+        // 전역 상태
+        let gapiInitialized = false;
+        let gisInitialized = false;
+        let tokenClient = null;
+        let isSignedIn = false;
+
+        // Promise 기반 Google API 매니저 (문서의 해결책 적용)
+        class GoogleAPIManager {
+            static async initialize() {
+                try {
+                    updateStatus('🔄 GAPI 라이브러리 로딩 중...', 'loading');
+                    updateProgress(20);
+                    
+                    // 1단계: gapi가 로드될 때까지 대기
+                    await this.waitForGapi();
+                    updateProgress(40);
+                    
+                    updateStatus('🔄 클라이언트 모듈 로딩 중...', 'loading');
+                    
+                    // 2단계: client 모듈 로드 (Promise 패턴 적용)
+                    await this.loadClientModule();
+                    updateProgress(60);
+                    
+                    updateStatus('🔄 API 클라이언트 초기화 중...', 'loading');
+                    
+                    // 3단계: API 클라이언트 초기화
+                    await this.initializeClient();
+                    updateProgress(80);
+                    
+                    updateStatus('🔄 인증 서비스 설정 중...', 'loading');
+                    
+                    // 4단계: GIS 토큰 클라이언트 설정
+                    await this.setupTokenClient();
+                    updateProgress(100);
+                    
+                    updateStatus('✅ Google API 초기화 완료!', 'success');
+                    
+                    // 인증 버튼 표시
+                    document.getElementById('auth-section').style.display = 'block';
+                    
+                    logDebug('Google API 초기화 성공');
+                    
+                } catch (error) {
+                    console.error('Google API 초기화 실패:', error);
+                    updateStatus(`❌ 초기화 실패: ${error.message}`, 'error');
+                    logDebug(`초기화 오류: ${error.message}`);
+                    throw error;
+                }
+            }
+            
+            // 문서의 waitForGapi 구현
+            static waitForGapi() {
+                return new Promise((resolve, reject) => {
+                    if (window.gapi) {
+                        logDebug('GAPI 이미 로드됨');
+                        resolve();
+                        return;
+                    }
+                    
+                    // 전역 콜백 설정
+                    window.gapiLoaded = () => {
+                        logDebug('GAPI 로드 완료');
+                        resolve();
+                    };
+                    
+                    // 타임아웃 설정 (10초)
+                    setTimeout(() => {
+                        if (!window.gapi) {
+                            reject(new Error('GAPI 로딩 타임아웃 (10초)'));
+                        }
+                    }, 10000);
+                });
+            }
+            
+            // 문서의 loadModules 구현 - Promise 패턴으로 콜백 처리
+            static loadClientModule() {
+                return new Promise((resolve, reject) => {
+                    logDebug('gapi.load("client") 호출 시작');
+                    
+                    gapi.load('client', {
+                        callback: () => {
+                            logDebug('client 모듈 로드 성공');
+                            resolve();
+                        },
+                        onerror: (error) => {
+                            logDebug(`client 모듈 로드 실패: ${error}`);
+                            reject(new Error(`Client 모듈 로딩 실패: ${error}`));
+                        },
+                        timeout: 5000,
+                        ontimeout: () => {
+                            logDebug('client 모듈 로드 타임아웃');
+                            reject(new Error('Client 모듈 로딩 타임아웃'));
+                        }
+                    });
+                });
+            }
+            
+            // 순차적 초기화로 타이밍 문제 해결
+            static async initializeClient() {
+                logDebug('gapi.client.init() 호출 시작');
+                
+                if (!gapi.client) {
+                    throw new Error('gapi.client가 정의되지 않음');
+                }
+                
+                try {
+                    await gapi.client.init({
+                        apiKey: CONFIG.apiKey,
+                        discoveryDocs: CONFIG.discoveryDocs
+                    });
+                    
+                    logDebug('gapi.client.init() 성공');
+                    gapiInitialized = true;
+                    
+                } catch (error) {
+                    logDebug(`gapi.client.init() 실패: ${error.message}`);
+                    throw new Error(`Client 초기화 실패: ${error.message}`);
+                }
+            }
+            
+            static async setupTokenClient() {
+                return new Promise((resolve, reject) => {
+                    if (!window.google?.accounts?.oauth2) {
+                        reject(new Error('Google Identity Services가 로드되지 않음'));
+                        return;
+                    }
+                    
+                    try {
+                        tokenClient = google.accounts.oauth2.initTokenClient({
+                            client_id: CONFIG.clientId,
+                            scope: CONFIG.scopes.join(' '),
+                            callback: (tokenResponse) => {
+                                if (tokenResponse.error) {
+                                    logDebug(`토큰 오류: ${tokenResponse.error}`);
+                                } else {
+                                    logDebug('토큰 수신 성공');
+                                    isSignedIn = true;
+                                    onSignIn();
+                                }
+                            }
+                        });
+                        
+                        gisInitialized = true;
+                        logDebug('토큰 클라이언트 초기화 성공');
+                        resolve();
+                        
+                    } catch (error) {
+                        reject(new Error(`토큰 클라이언트 설정 실패: ${error.message}`));
+                    }
+                });
+            }
         }
 
-        async function initializeGapiClient() {
-            await gapi.client.init({
-                apiKey: API_KEY,
-                discoveryDocs: [DISCOVERY_DOC],
-            });
-            gapiInited = true;
-            maybeEnableButtons();
+        // 전역 콜백 함수들
+        function gapiLoaded() {
+            logDebug('gapiLoaded 콜백 호출됨');
+            // GoogleAPIManager.waitForGapi()에서 처리됨
         }
 
         function gisLoaded() {
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
-                scope: SCOPES,
-                callback: '', // 나중에 정의
-            });
-            gisInited = true;
-            maybeEnableButtons();
+            logDebug('gisLoaded 콜백 호출됨');
+            // GIS 로드 완료
         }
 
-        function maybeEnableButtons() {
-            if (gapiInited && gisInited) {
-                updateProgress(100);
-                updateStatus('✅ Google API 초기화 완료!', 'success');
-                document.getElementById('auth-section').style.display = 'block';
-            }
-        }
-
-        // 인증 처리
-        function handleAuthClick() {
-            tokenClient.callback = async (resp) => {
-                if (resp.error !== undefined) {
-                    throw (resp);
-                }
-                
-                // ✅ 2단계: 메인 시스템으로 전환
-                switchToMainSystem();
-            };
-
-            if (gapi.client.getToken() === null) {
-                tokenClient.requestAccessToken({prompt: 'consent'});
-            } else {
-                tokenClient.requestAccessToken({prompt: ''});
-            }
-        }
-
-        function handleSignoutClick() {
-            const token = gapi.client.getToken();
-            if (token !== null) {
-                google.accounts.oauth2.revoke(token.access_token);
-                gapi.client.setToken('');
-                
-                // 로딩 화면으로 돌아가기
-                document.getElementById('loading-stage').style.display = 'block';
-                document.getElementById('main-stage').style.display = 'none';
-                updateStatus('🔐 로그인이 필요합니다', 'loading');
-                document.getElementById('auth-section').style.display = 'block';
-            }
-        }
-
-        // ✅ 2단계: 메인 시스템으로 전환
-        function switchToMainSystem() {
-            document.getElementById('loading-stage').style.display = 'none';
-            document.getElementById('main-stage').style.display = 'block';
-            
-            // 메인 시스템 초기화
-            loadSettings();
-            updateThresholdDisplay();
-            updateExchangeRateDisplay();
-            updateOutlierDisplay();
-            updateVariationDisplay();
-            updateMainStatus('dataStatus', 'success', 'Google Drive 연결됨');
-        }
-
-        // 상태 업데이트 (로딩 단계)
+        // 상태 업데이트 함수
         function updateStatus(message, type) {
             const statusEl = document.getElementById('init-status');
             statusEl.textContent = message;
@@ -827,290 +336,134 @@
             document.getElementById('progress-fill').style.width = `${percent}%`;
         }
 
-        // 이벤트 리스너 설정
-        document.addEventListener('DOMContentLoaded', () => {
-            updateStatus('🔄 Google API 초기화 중...', 'loading');
-            updateProgress(20);
+        function logDebug(message) {
+            const debugContent = document.getElementById('debug-content');
+            const timestamp = new Date().toLocaleTimeString();
+            debugContent.innerHTML += `[${timestamp}] ${message}<br>`;
+            console.log(`[DEBUG] ${message}`);
             
-            document.getElementById('auth-button').addEventListener('click', handleAuthClick);
-            document.getElementById('signout-button').addEventListener('click', handleSignoutClick);
-        });
+            // 디버그 패널 표시
+            document.getElementById('debug-info').style.display = 'block';
+        }
 
-        // ========== 메인 시스템 함수들 (원본 기능 유지) ==========
-        
-        // Google 로그아웃 (메인 시스템용)
-        function signOutGoogle() {
-            handleSignoutClick();
-        }
-        
-        // 실제 Google Drive에서 파케이 파일 로드
-        async function loadParquetFile(date) {
-            if (!gapiInited || gapi.client.getToken() === null) {
-                throw new Error('Google 로그인이 필요합니다.');
-            }
-            
-            try {
-                const fileName = `trade_${date}`;
-                const response = await gapi.client.drive.files.list({
-                    q: `name contains '${fileName}'`,
-                    spaces: 'drive',
-                    fields: 'files(id, name, mimeType)'
-                });
-                
-                if (response.result.files.length === 0) {
-                    console.log(`${date} 파일을 찾을 수 없습니다.`);
-                    return generateSampleTradeData(date, 100); // 샘플 데이터 반환
-                }
-                
-                const file = response.result.files[0];
-                console.log(`파일 발견: ${file.name} (${file.mimeType})`);
-                
-                const fileResponse = await gapi.client.drive.files.get({
-                    fileId: file.id,
-                    alt: 'media'
-                });
-                
-                if (file.mimeType === 'text/csv' || file.name.endsWith('.csv')) {
-                    const csvData = fileResponse.body;
-                    const parsedData = Papa.parse(csvData, {
-                        header: true,
-                        dynamicTyping: true,
-                        skipEmptyLines: true
-                    });
-                    
-                    console.log(`${date} 데이터 로드 완료: ${parsedData.data.length}건`);
-                    return parsedData.data;
-                } else {
-                    console.log('파케이 파일은 CSV로 변환 후 업로드해주세요.');
-                    return generateSampleTradeData(date, 100);
-                }
-                
-            } catch (error) {
-                console.error(`${date} 파일 로드 실패:`, error);
-                if (error.status === 401) {
-                    updateMainStatus('dataStatus', 'error', '인증 만료됨 - 다시 로그인해주세요');
-                    signOutGoogle();
-                }
-                return generateSampleTradeData(date, 100);
-            }
-        }
-        
-        // 탭 전환
-        function showTab(tabName) {
-            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            
-            event.target.classList.add('active');
-            document.getElementById(tabName).classList.add('active');
-        }
-        
-        // 거래 데이터 로드
-        async function loadTradeData() {
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
-            
-            if (!startDate || !endDate) {
-                alert('날짜를 선택해주세요.');
+        // 인증 관련 함수
+        function requestAccessToken() {
+            if (!tokenClient) {
+                alert('토큰 클라이언트가 초기화되지 않았습니다.');
                 return;
             }
+
+            tokenClient.requestAccessToken({ prompt: '' });
+        }
+
+        function onSignIn() {
+            updateStatus('✅ 로그인 성공! 시스템 사용 가능', 'success');
+            document.getElementById('auth-button').style.display = 'none';
+            document.getElementById('signout-button').style.display = 'inline-block';
+            document.getElementById('main-content').style.display = 'block';
             
-            setLoadingState(true);
-            updateMainStatus('dataStatus', 'loading', '데이터 로딩 중...');
+            logDebug('사용자 로그인 완료');
+        }
+
+        function signOut() {
+            const token = gapi.client.getToken();
+            if (token !== null) {
+                google.accounts.oauth2.revoke(token.access_token);
+                gapi.client.setToken('');
+            }
             
-            try {
-                const dates = getDateRange(startDate, endDate);
-                let totalTrades = [];
-                let loadedCount = 0;
+            isSignedIn = false;
+            document.getElementById('auth-button').style.display = 'inline-block';
+            document.getElementById('signout-button').style.display = 'none';
+            document.getElementById('main-content').style.display = 'none';
+            
+            updateStatus('🔐 로그아웃 완료', 'loading');
+            logDebug('사용자 로그아웃 완료');
+        }
+
+        // 파일 업로드 처리
+        function setupFileUpload() {
+            const uploadArea = document.getElementById('upload-area');
+            const fileInput = document.getElementById('csv-upload');
+
+            uploadArea.addEventListener('click', () => fileInput.click());
+
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.style.backgroundColor = '#e3f2fd';
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.style.backgroundColor = '#fafafa';
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.style.backgroundColor = '#fafafa';
                 
-                for (const date of dates) {
-                    if (processedDates.has(date)) {
-                        console.log(`${date} 데이터는 이미 처리됨, 건너뛰기`);
-                        continue;
-                    }
-                    
-                    const dateData = await loadParquetFile(date);
-                    if (dateData && dateData.length > 0) {
-                        totalTrades.push(...dateData);
-                        processedDates.add(date);
-                        loadedCount++;
-                    }
-                    
-                    updateLoadProgress((loadedCount / dates.length) * 100);
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFile(files[0]);
                 }
-                
-                if (totalTrades.length > 0) {
-                    tradeData.push(...totalTrades);
-                    updateMetrics();
-                    updateMainStatus('dataStatus', 'success', `${totalTrades.length}건 로드 완료`);
-                    
-                    document.getElementById('loadResults').innerHTML = `
-                        <div class="tag info">✅ ${totalTrades.length}건의 새로운 거래 데이터가 로드되었습니다.</div>
-                        <div style="margin-top: 10px;">
-                            <strong>로드된 날짜:</strong> ${dates.join(', ')}
-                        </div>
-                    `;
-                } else {
-                    updateMainStatus('dataStatus', 'error', '데이터 없음');
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFile(e.target.files[0]);
                 }
-                
-            } catch (error) {
-                console.error('데이터 로드 오류:', error);
-                updateMainStatus('dataStatus', 'error', '로드 실패');
-                alert('데이터 로드 중 오류가 발생했습니다.');
-            } finally {
-                setLoadingState(false);
+            });
+        }
+
+        function handleFile(file) {
+            if (!file.name.endsWith('.csv')) {
+                alert('CSV 파일만 업로드 가능합니다.');
+                return;
             }
-        }
-        
-        // 샘플 거래 데이터 생성
-        function generateSampleTradeData(date, count) {
-            const data = [];
-            for (let i = 0; i < count; i++) {
-                data.push({
-                    sender_id: `2037210000${Math.floor(Math.random() * 1000000)}`,
-                    receiver_id: `2037210000${Math.floor(Math.random() * 1000000)}`,
-                    sender_meso: Math.floor(Math.random() * 10000000),
-                    receiver_meso: Math.floor(Math.random() * 10000000),
-                    sender_trade_info: generateRandomItems(),
-                    receiver_trade_info: generateRandomItems(),
-                    created_at: `${date}T${String(Math.floor(Math.random() * 24)).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}.000Z`
-                });
-            }
-            return data;
-        }
-        
-        // 랜덤 아이템 생성
-        function generateRandomItems() {
-            const items = ['눈 결정 뿌리기', '엘릭서', '파란 포션', '빨간 포션', '망토 행운 주문서'];
-            const randomItem = items[Math.floor(Math.random() * items.length)];
-            const count = Math.floor(Math.random() * 50) + 1;
-            return Math.random() > 0.3 ? `[Sender] [${randomItem}/id/uuid/${count}개]` : '';
-        }
-        
-        // 날짜 범위 생성
-        function getDateRange(startDate, endDate) {
-            const dates = [];
-            const current = new Date(startDate);
-            const end = new Date(endDate);
+
+            logDebug(`파일 업로드: ${file.name} (${file.size} bytes)`);
             
-            while (current <= end) {
-                dates.push(current.toISOString().split('T')[0]);
-                current.setDate(current.getDate() + 1);
-            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const csv = e.target.result;
+                analyzeCSV(csv);
+            };
+            reader.readAsText(file);
+        }
+
+        function analyzeCSV(csvData) {
+            logDebug('CSV 분석 시작');
             
-            return dates;
-        }
-        
-        // 상태 업데이트 (메인 시스템용)
-        function updateMainStatus(statusId, state, text) {
-            const indicator = document.getElementById(statusId);
-            const textElement = document.getElementById(statusId + 'Text');
+            // 간단한 CSV 파싱 및 분석 예제
+            const lines = csvData.split('\n');
+            const headers = lines[0].split(',');
             
-            if (indicator && textElement) {
-                indicator.className = `status-indicator ${state}`;
-                textElement.textContent = text;
-            }
-        }
-        
-        // 로딩 상태 설정
-        function setLoadingState(isLoading) {
-            const button = document.querySelector('button[onclick="loadTradeData()"]');
-            const spinner = document.getElementById('loadSpinner');
-            const progress = document.getElementById('loadProgress');
+            document.getElementById('analysis-results').style.display = 'block';
+            document.getElementById('results-content').innerHTML = `
+                <p><strong>분석 완료!</strong></p>
+                <p>헤더: ${headers.join(', ')}</p>
+                <p>데이터 행 수: ${lines.length - 1}</p>
+                <p>첫 번째 데이터: ${lines[1]}</p>
+            `;
             
-            if (button && spinner && progress) {
-                if (isLoading) {
-                    button.disabled = true;
-                    spinner.style.display = 'inline-block';
-                    progress.style.display = 'block';
-                } else {
-                    button.disabled = false;
-                    spinner.style.display = 'none';
-                    progress.style.display = 'none';
-                }
-            }
+            logDebug(`CSV 분석 완료: ${lines.length} 행`);
         }
-        
-        // 로딩 진행률 업데이트
-        function updateLoadProgress(percent) {
-            const progressFill = document.getElementById('loadProgressFill');
-            if (progressFill) {
-                progressFill.style.width = `${percent}%`;
-            }
-        }
-        
-        // 메트릭 업데이트
-        function updateMetrics() {
-            const totalTradesEl = document.getElementById('totalTrades');
-            const suspiciousTradesEl = document.getElementById('suspiciousTrades');
-            const flaggedUsersEl = document.getElementById('flaggedUsers');
-            const lastUpdateEl = document.getElementById('lastUpdateTime');
+
+        // 이벤트 리스너 설정
+        document.addEventListener('DOMContentLoaded', () => {
+            logDebug('DOM 로드 완료, Google API 초기화 시작');
             
-            if (totalTradesEl) totalTradesEl.textContent = tradeData.length.toLocaleString();
+            // 버튼 이벤트 리스너
+            document.getElementById('auth-button').addEventListener('click', requestAccessToken);
+            document.getElementById('signout-button').addEventListener('click', signOut);
             
-            if (suspiciousTradesEl) {
-                const suspiciousCount = Math.floor(tradeData.length * 0.1); // 임시로 10%
-                suspiciousTradesEl.textContent = suspiciousCount.toLocaleString();
-            }
+            // 파일 업로드 설정
+            setupFileUpload();
             
-            if (flaggedUsersEl) {
-                const uniqueUsers = new Set();
-                tradeData.forEach(trade => {
-                    uniqueUsers.add(trade.sender_id);
-                    uniqueUsers.add(trade.receiver_id);
-                });
-                flaggedUsersEl.textContent = uniqueUsers.size.toLocaleString();
-            }
-            
-            if (lastUpdateEl) {
-                lastUpdateEl.textContent = `마지막 업데이트: ${new Date().toLocaleString()}`;
-            }
-        }
-        
-        // 나머지 함수들 (간단한 스텁으로 구현)
-        function loadHackUsers() { alert('핵로그 유저 로드 기능'); }
-        function loadMarketPrices() { alert('마켓시세 로드 기능'); }
-        function loadItemInfo() { alert('아이템 정보 로드 기능'); }
-        function calculateSnowExchangeRate() { alert('환율 계산 기능'); }
-        function calculateDailyPrices() { alert('일간 시세 계산 기능'); }
-        function calculateWeeklyPrices() { alert('주간 시세 계산 기능'); }
-        function searchItemPrices() { alert('시세 검색 기능'); }
-        function analyzeUsers() { alert('유저 분석 기능'); }
-        function exportSanctionList() { alert('제재 목록 내보내기 기능'); }
-        function clearSanctions() { alert('제재 목록 초기화 기능'); }
-        function processAppeals() { alert('이의제기 처리 기능'); }
-        
-        // 설정 관련 함수들
-        function updateThresholdDisplay() {
-            const value = document.getElementById('valueImbalanceThreshold')?.value || 10;
-            const display = document.getElementById('valueImbalanceDisplay');
-            if (display) display.textContent = `${value}배`;
-        }
-        
-        function updateExchangeRateDisplay() {
-            const value = document.getElementById('exchangeRateRange')?.value || 30;
-            const display = document.getElementById('exchangeRateDisplay');
-            if (display) display.textContent = `±${value}%`;
-        }
-        
-        function updateOutlierDisplay() {
-            const value = document.getElementById('outlierRemovalRate')?.value || 10;
-            const display = document.getElementById('outlierDisplay');
-            if (display) display.textContent = `${value}%`;
-        }
-        
-        function updateVariationDisplay() {
-            const value = document.getElementById('priceVariationRange')?.value || 50;
-            const display = document.getElementById('variationDisplay');
-            if (display) display.textContent = `${value}%`;
-        }
-        
-        function saveSettings() { alert('설정 저장됨'); }
-        function savePriceSettings() { alert('시세 설정 저장됨'); }
-        
-        function loadSettings() {
-            // 설정 로드 로직 (localStorage 등)
-        }
+            // Google API 초기화
+            GoogleAPIManager.initialize().catch(error => {
+                console.error('초기화 중 오류:', error);
+            });
+        });
     </script>
 </body>
 </html>
