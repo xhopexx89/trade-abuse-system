@@ -768,7 +768,16 @@
                 'https://www.googleapis.com/auth/drive.file',
                 'https://www.googleapis.com/auth/spreadsheets'
             ],
-            systemFolderId: '1Tc3wUQmTvne_y9grVG_UJ-pzyWABa2u2' // 아르테일_거래어뷰징_시스템 폴더 ID
+            // 폴더 ID 직접 지정
+            systemFolderId: '1Tc3wUQmTvne_y9grVG_UJ-pzyWABa2u2', // 최상위: 아르테일_거래어뷰징_시스템
+            tradeFolderId: '19XpUQ0NKmFAtGvs4N0gq1--6V0vWG-Lk', // 1_일자별_거래데이터
+            referenceFolderId: '1brYxbPAMSGqjIpv2qDi_lv9uP2eE_vRg', // 2_참고데이터
+            marketPriceFolderId: '1qkkIvdKcPf6WuZuHEIcrDwsL26VZ4AfM', // 일자별_마켓시세
+            resultFolderId: '1cO7zFpwhM3-P4vv9e31saDBuZzaxbxUe', // 3_분석결과
+            priceTableFolderId: '10t28nTakLWF17ABVCb6FyIl3hk2TXOwx', // 시세표
+            abuseFolderId: '1c4D2Q64RvYxiqfTNbUlZT5-mhbawx38a', // 어뷰징의심거래
+            sanctionFolderId: '1nznWPK6lGRVy61fY8BXI198zpKZVYg7W', // 제재관리
+            systemFileFolderId: '12YwjFkGa7Zz2mxs3N7wGZ5KuCdDz8eiZ' // 4_시스템파일
         };
 
         // 전역 상태
@@ -1112,15 +1121,9 @@
             try {
                 updateMainStatus('dataStatus', 'loading', '참조 데이터 로딩 중...');
                 
-                // 2_참고데이터 폴더 찾기
-                const referenceFolder = await findFolderInSystem('2_참고데이터');
-                if (!referenceFolder) {
-                    console.log('참고데이터 폴더를 찾을 수 없습니다.');
-                    return;
-                }
-                
+                // 2_참고데이터 폴더에서 직접 파일 찾기 (ID 사용)
                 // string.csv (핵로그 유저) 로드
-                const stringFile = await findFileInFolder(referenceFolder.id, 'string.csv');
+                const stringFile = await findFileInFolder(CONFIG.referenceFolderId, 'string.csv');
                 if (stringFile) {
                     const content = await downloadFile(stringFile.id);
                     const parsed = Papa.parse(content, {
@@ -1138,7 +1141,7 @@
                 }
                 
                 // 아이템정보시트.csv 로드
-                const itemFile = await findFileInFolder(referenceFolder.id, '아이템정보시트.csv');
+                const itemFile = await findFileInFolder(CONFIG.referenceFolderId, '아이템정보시트.csv');
                 if (itemFile) {
                     const content = await downloadFile(itemFile.id);
                     const parsed = Papa.parse(content, {
@@ -1263,22 +1266,16 @@
             }
             
             try {
-                // 1_일자별_거래데이터 폴더 찾기
-                const dataFolder = await findFolderInSystem('1_일자별_거래데이터');
-                if (!dataFolder) {
-                    console.log('거래데이터 폴더를 찾을 수 없습니다.');
-                    return generateSampleTradeData(date, 100);
-                }
-                
+                // 1_일자별_거래데이터 폴더에서 직접 파일 찾기 (ID 사용)
                 // CSV 파일 찾기 (파케이 대신)
                 const fileName = `trade_${date}.csv`;
-                const file = await findFileInFolder(dataFolder.id, fileName);
+                const file = await findFileInFolder(CONFIG.tradeFolderId, fileName);
                 
                 if (!file) {
                     console.log(`${fileName} 파일을 찾을 수 없습니다.`);
                     // 파케이 파일 찾기 시도
                     const parquetName = `trade_${date}.parquet`;
-                    const parquetFile = await findFileInFolder(dataFolder.id, parquetName);
+                    const parquetFile = await findFileInFolder(CONFIG.tradeFolderId, parquetName);
                     
                     if (parquetFile) {
                         console.log(`${parquetName}을 찾았지만, CSV 변환이 필요합니다.`);
