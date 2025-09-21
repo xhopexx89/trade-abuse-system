@@ -1,0 +1,1988 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>아르테일 거래 어뷰징 탐지 시스템</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 10px;
+        }
+        
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .status-bar {
+            background: #f8f9fa;
+            padding: 15px 30px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #27ae60;
+        }
+        
+        .status-indicator.loading {
+            background: #f39c12;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .status-indicator.error {
+            background: #e74c3c;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .main-content {
+            padding: 30px;
+        }
+        
+        .tab-container {
+            display: flex;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #ecf0f1;
+            overflow-x: auto;
+        }
+        
+        .tab {
+            padding: 15px 25px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.1rem;
+            color: #7f8c8d;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+        
+        .tab.active {
+            color: #2c3e50;
+            border-bottom-color: #3498db;
+            font-weight: 600;
+        }
+        
+        .tab:hover {
+            color: #2c3e50;
+            background: #f8f9fa;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .grid {
+            display: grid;
+            gap: 20px;
+        }
+        
+        .grid-2 {
+            grid-template-columns: 1fr 1fr;
+        }
+        
+        .grid-3 {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            border: 1px solid #ecf0f1;
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
+        
+        .card h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .input-group {
+            margin-bottom: 20px;
+        }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .input-group input, .input-group textarea, .input-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ecf0f1;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+        
+        .input-group input:focus, .input-group textarea:focus, .input-group select:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin: 5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn.success {
+            background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+        }
+        
+        .btn.danger {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+        
+        .btn.warning {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+        }
+        
+        .metric-card {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(52, 152, 219, 0.3);
+        }
+        
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .metric-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #ecf0f1;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2980b9);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .file-drop-zone {
+            border: 3px dashed #bdc3c7;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            background: #f8f9fa;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .file-drop-zone:hover {
+            border-color: #3498db;
+            background: #ebf3fd;
+        }
+        
+        .file-drop-zone.dragover {
+            border-color: #27ae60;
+            background: #d5f4e6;
+        }
+        
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .results-table th {
+            background: #34495e;
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        .results-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        
+        .results-table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .risk-high {
+            background: #ffe6e6 !important;
+            border-left: 4px solid #e74c3c;
+        }
+        
+        .risk-medium {
+            background: #fff9e6 !important;
+            border-left: 4px solid #f39c12;
+        }
+        
+        .risk-low {
+            background: #e6f3ff !important;
+            border-left: 4px solid #3498db;
+        }
+        
+        .tag {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin: 2px;
+        }
+        
+        .tag.danger {
+            background: #ffe6e6;
+            color: #e74c3c;
+        }
+        
+        .tag.warning {
+            background: #fff9e6;
+            color: #f39c12;
+        }
+        
+        .tag.info {
+            background: #e6f3ff;
+            color: #3498db;
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .date-range-picker {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin: 20px 0;
+        }
+        
+        @media (max-width: 768px) {
+            .grid-2, .grid-3 {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .tab-container {
+                border-bottom: none;
+            }
+            
+            .tab {
+                padding: 10px 15px;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ 아르테일 거래 어뷰징 탐지 시스템</h1>
+            <p>실시간 거래 분석 및 어뷰징 패턴 탐지</p>
+        </div>
+        
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-indicator" id="dataStatus"></div>
+                <span id="dataStatusText">데이터 대기 중</span>
+            </div>
+            <div class="status-item">
+                <div class="status-indicator" id="priceStatus"></div>
+                <span id="priceStatusText">시세 계산 대기 중</span>
+            </div>
+            <div class="status-item">
+                <div class="status-indicator" id="analysisStatus"></div>
+                <span id="analysisStatusText">분석 준비</span>
+            </div>
+            <div class="status-item">
+                <span id="lastUpdateTime">마지막 업데이트: -</span>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="tab-container">
+                <button class="tab active" onclick="showTab('dashboard')">📊 대시보드</button>
+                <button class="tab" onclick="showTab('data-load')">📁 데이터 로드</button>
+                <button class="tab" onclick="showTab('price-analysis')">💰 시세 분석</button>
+                <button class="tab" onclick="showTab('abuse-detection')">🔍 어뷰징 탐지</button>
+                <button class="tab" onclick="showTab('sanctions')">⚖️ 제재 관리</button>
+                <button class="tab" onclick="showTab('appeals')">📋 이의제기 처리</button>
+                <button class="tab" onclick="showTab('settings')">⚙️ 설정</button>
+            </div>
+            
+            <!-- 대시보드 탭 -->
+            <div id="dashboard" class="tab-content active">
+                <div class="grid grid-3">
+                    <div class="metric-card">
+                        <div class="metric-value" id="totalTrades">0</div>
+                        <div class="metric-label">총 거래 수</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="suspiciousTrades">0</div>
+                        <div class="metric-label">의심 거래</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="flaggedUsers">0</div>
+                        <div class="metric-label">의심 유저</div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-2" style="margin-top: 30px;">
+                    <div class="card">
+                        <h3>📈 거래량 추이</h3>
+                        <div class="chart-container">
+                            <canvas id="tradeVolumeChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>🎯 어뷰징 탐지 현황</h3>
+                        <div class="chart-container">
+                            <canvas id="abuseDetectionChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 데이터 로드 탭 -->
+            <div id="data-load" class="tab-content">
+                <div class="grid grid-2">
+                    <div class="card">
+                        <h3>📁 거래 데이터 로드</h3>
+                        <div class="date-range-picker">
+                            <label>시작일:</label>
+                            <input type="date" id="startDate" value="2025-09-16">
+                            <label>종료일:</label>
+                            <input type="date" id="endDate" value="2025-09-16">
+                        </div>
+                        <button class="btn" onclick="loadTradeData()">
+                            <span class="loading-spinner" id="loadSpinner" style="display: none;"></span>
+                            거래 데이터 로드
+                        </button>
+                        <div class="progress-bar" id="loadProgress" style="display: none;">
+                            <div class="progress-fill" id="loadProgressFill"></div>
+                        </div>
+                        <div id="loadResults" style="margin-top: 20px;"></div>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>📊 참고 데이터 관리</h3>
+                        <div class="input-group">
+                            <label>핵로그 유저 리스트 (CSV)</label>
+                            <input type="file" id="hackUserFile" accept=".csv" onchange="loadHackUsers()">
+                        </div>
+                        <div class="input-group">
+                            <label>마켓시세 데이터 (CSV)</label>
+                            <input type="file" id="marketPriceFile" accept=".csv" onchange="loadMarketPrices()">
+                        </div>
+                        <div class="input-group">
+                            <label>아이템 정보 시트 (CSV)</label>
+                            <input type="file" id="itemInfoFile" accept=".csv" onchange="loadItemInfo()">
+                        </div>
+                        <div id="referenceDataStatus" style="margin-top: 20px;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 시세 분석 탭 -->
+            <div id="price-analysis" class="tab-content">
+                <div class="card">
+                    <h3>💱 눈 결정 뿌리기 환율 분석</h3>
+                    <button class="btn" onclick="calculateSnowExchangeRate()">환율 계산</button>
+                    <div id="snowRateResults" style="margin-top: 20px;"></div>
+                </div>
+                
+                <div class="grid grid-2" style="margin-top: 20px;">
+                    <div class="card">
+                        <h3>📈 일간 시세</h3>
+                        <div class="input-group">
+                            <label>분석 날짜</label>
+                            <input type="date" id="dailyPriceDate" value="2025-09-16">
+                        </div>
+                        <button class="btn" onclick="calculateDailyPrices()">일간 시세 계산</button>
+                        <div id="dailyPriceResults" style="margin-top: 20px;"></div>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>📊 주간 시세</h3>
+                        <div class="input-group">
+                            <label>기준 주</label>
+                            <input type="week" id="weeklyPriceWeek">
+                        </div>
+                        <button class="btn" onclick="calculateWeeklyPrices()">주간 시세 계산</button>
+                        <div id="weeklyPriceResults" style="margin-top: 20px;"></div>
+                    </div>
+                </div>
+                
+                <div class="card" style="margin-top: 20px;">
+                    <h3>🎯 시세 검색</h3>
+                    <div class="input-group">
+                        <label>아이템명 검색</label>
+                        <input type="text" id="itemSearch" placeholder="아이템명을 입력하세요">
+                    </div>
+                    <button class="btn" onclick="searchItemPrices()">시세 검색</button>
+                    <div id="itemSearchResults" style="margin-top: 20px;"></div>
+                </div>
+            </div>
+            
+            <!-- 어뷰징 탐지 탭 -->
+            <div id="abuse-detection" class="tab-content">
+                <div class="card">
+                    <h3>🔍 유저 분석</h3>
+                    <div class="input-group">
+                        <label>유저 ID (여러 개 입력 시 쉼표로 구분)</label>
+                        <textarea id="userIds" placeholder="예: 20372100005661359, 20372100007855395" rows="3"></textarea>
+                    </div>
+                    <div class="grid grid-2">
+                        <div class="input-group">
+                            <label>분석 필터</label>
+                            <select id="analysisFilter">
+                                <option value="all">모든 거래</option>
+                                <option value="hack_related">핵로그 유저 관련</option>
+                                <option value="high_value">고가 거래</option>
+                                <option value="suspicious_pattern">의심 패턴</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>분석 기간 (일)</label>
+                            <input type="number" id="analysisPeriod" value="7" min="1" max="30">
+                        </div>
+                    </div>
+                    <button class="btn" onclick="analyzeUsers()">🔍 분석 시작</button>
+                </div>
+                
+                <div id="analysisResults" style="display: none; margin-top: 20px;">
+                    <div class="card">
+                        <h3>📋 분석 결과</h3>
+                        <div id="analysisContent"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 제재 관리 탭 -->
+            <div id="sanctions" class="tab-content">
+                <div class="card">
+                    <h3>⚖️ 제재 대상 관리</h3>
+                    <div class="grid grid-2">
+                        <button class="btn success" onclick="exportSanctionList()">📤 제재 목록 내보내기</button>
+                        <button class="btn danger" onclick="clearSanctions()">🗑️ 제재 목록 초기화</button>
+                    </div>
+                    <div id="sanctionsList" style="margin-top: 20px;"></div>
+                </div>
+            </div>
+            
+            <!-- 이의제기 처리 탭 -->
+            <div id="appeals" class="tab-content">
+                <div class="card">
+                    <h3>📋 이의제기 처리</h3>
+                    <div class="input-group">
+                        <label>이의제기 유저 ID (여러 개 입력 시 쉼표로 구분)</label>
+                        <textarea id="appealUserIds" placeholder="예: 20372100005661359, 20372100007855395" rows="3"></textarea>
+                    </div>
+                    <button class="btn" onclick="processAppeals()">📋 제재 근거 조회</button>
+                    
+                    <div id="appealResults" style="display: none; margin-top: 20px;">
+                        <div class="card">
+                            <h3>🔍 제재 근거 조회 결과</h3>
+                            <div id="appealContent"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 설정 탭 -->
+            <div id="settings" class="tab-content">
+                <div class="grid grid-2">
+                    <div class="card">
+                        <h3>🎯 어뷰징 탐지 설정</h3>
+                        <div class="input-group">
+                            <label>가치 불균형 임계값 (배수)</label>
+                            <input type="range" id="valueImbalanceThreshold" min="2" max="50" value="10" oninput="updateThresholdDisplay()">
+                            <span id="valueImbalanceDisplay">10배</span>
+                        </div>
+                        <div class="input-group">
+                            <label>몰아주기 최소 횟수</label>
+                            <input type="number" id="giftingMinCount" value="3" min="1" max="10">
+                        </div>
+                        <div class="input-group">
+                            <label>몰아주기 최소 금액 (메소)</label>
+                            <input type="number" id="giftingMinValue" value="1000000" step="100000">
+                        </div>
+                        <div class="input-group">
+                            <label>환율 조작 감지 범위 (%)</label>
+                            <input type="range" id="exchangeRateRange" min="10" max="50" value="30" oninput="updateExchangeRateDisplay()">
+                            <span id="exchangeRateDisplay">±30%</span>
+                        </div>
+                        <button class="btn success" onclick="saveSettings()">💾 설정 저장</button>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>📊 시세 계산 설정</h3>
+                        <div class="input-group">
+                            <label>최소 거래량 (일간)</label>
+                            <input type="number" id="minDailyTrades" value="5" min="1">
+                        </div>
+                        <div class="input-group">
+                            <label>최소 거래량 (주간)</label>
+                            <input type="number" id="minWeeklyTrades" value="3" min="1">
+                        </div>
+                        <div class="input-group">
+                            <label>극단값 제거 비율 (%)</label>
+                            <input type="range" id="outlierRemovalRate" min="5" max="20" value="10" oninput="updateOutlierDisplay()">
+                            <span id="outlierDisplay">10%</span>
+                        </div>
+                        <div class="input-group">
+                            <label>시세 변동 허용 범위 (%)</label>
+                            <input type="range" id="priceVariationRange" min="20" max="100" value="50" oninput="updateVariationDisplay()">
+                            <span id="variationDisplay">50%</span>
+                        </div>
+                        <button class="btn success" onclick="savePriceSettings()">💾 설정 저장</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 전역 변수
+        let tradeData = [];
+        let hackUsers = new Set();
+        let marketPrices = new Map();
+        let itemInfo = new Map();
+        let dailyPrices = new Map();
+        let weeklyPrices = new Map();
+        let snowToMesoRate = 0;
+        let flaggedTrades = new Set();
+        let processedDates = new Set();
+        
+        // 설정값
+        let settings = {
+            valueImbalanceThreshold: 10,
+            giftingMinCount: 3,
+            giftingMinValue: 1000000,
+            exchangeRateRange: 0.3,
+            minDailyTrades: 5,
+            minWeeklyTrades: 3,
+            outlierRemovalRate: 0.1,
+            priceVariationRange: 0.5
+        };
+        
+        // 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSettings();
+            updateThresholdDisplay();
+            updateExchangeRateDisplay();
+            updateOutlierDisplay();
+            updateVariationDisplay();
+        });
+        
+        // 탭 전환
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+        
+        // 거래 데이터 로드
+        async function loadTradeData() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (!startDate || !endDate) {
+                alert('날짜를 선택해주세요.');
+                return;
+            }
+            
+            setLoadingState(true);
+            updateStatus('dataStatus', 'loading', '데이터 로딩 중...');
+            
+            try {
+                const dates = getDateRange(startDate, endDate);
+                let totalTrades = [];
+                let loadedCount = 0;
+                
+                for (const date of dates) {
+                    if (processedDates.has(date)) {
+                        console.log(`${date} 데이터는 이미 처리됨, 건너뛰기`);
+                        continue;
+                    }
+                    
+                    const dateData = await loadParquetFile(date);
+                    if (dateData && dateData.length > 0) {
+                        totalTrades.push(...dateData);
+                        processedDates.add(date);
+                        loadedCount++;
+                    }
+                    
+                    updateLoadProgress((loadedCount / dates.length) * 100);
+                }
+                
+                if (totalTrades.length > 0) {
+                    tradeData.push(...totalTrades);
+                    updateMetrics();
+                    updateStatus('dataStatus', 'success', `${totalTrades.length}건 로드 완료`);
+                    
+                    document.getElementById('loadResults').innerHTML = `
+                        <div class="tag info">✅ ${totalTrades.length}건의 새로운 거래 데이터가 로드되었습니다.</div>
+                        <div style="margin-top: 10px;">
+                            <strong>로드된 날짜:</strong> ${dates.filter(d => !processedDates.has(d) || processedDates.has(d)).join(', ')}
+                        </div>
+                    `;
+                } else {
+                    updateStatus('dataStatus', 'error', '데이터 없음');
+                }
+                
+            } catch (error) {
+                console.error('데이터 로드 오류:', error);
+                updateStatus('dataStatus', 'error', '로드 실패');
+                alert('데이터 로드 중 오류가 발생했습니다.');
+            } finally {
+                setLoadingState(false);
+            }
+        }
+        
+        // 파케이 파일 로드 시뮬레이션 (실제로는 Google Drive API 사용)
+        async function loadParquetFile(date) {
+            // 실제 구현에서는 Google Drive API를 통해 파케이 파일을 로드
+            // 지금은 시뮬레이션을 위해 샘플 데이터 생성
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    // 샘플 데이터 생성
+                    const sampleData = generateSampleTradeData(date, 100);
+                    resolve(sampleData);
+                }, 1000);
+            });
+        }
+        
+        // 샘플 거래 데이터 생성
+        function generateSampleTradeData(date, count) {
+            const data = [];
+            for (let i = 0; i < count; i++) {
+                data.push({
+                    sender_id: `2037210000${Math.floor(Math.random() * 1000000)}`,
+                    receiver_id: `2037210000${Math.floor(Math.random() * 1000000)}`,
+                    sender_meso: Math.floor(Math.random() * 10000000),
+                    receiver_meso: Math.floor(Math.random() * 10000000),
+                    sender_trade_info: generateRandomItems(),
+                    receiver_trade_info: generateRandomItems(),
+                    created_at: `${date}T${String(Math.floor(Math.random() * 24)).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}.000Z`
+                });
+            }
+            return data;
+        }
+        
+        // 랜덤 아이템 생성
+        function generateRandomItems() {
+            const items = ['눈 결정 뿌리기', '엘릭서', '파란 포션', '빨간 포션', '망토 행운 주문서'];
+            const randomItem = items[Math.floor(Math.random() * items.length)];
+            const count = Math.floor(Math.random() * 50) + 1;
+            return Math.random() > 0.3 ? `[Sender] [${randomItem}/id/uuid/${count}개]` : '';
+        }
+        
+        // 날짜 범위 생성
+        function getDateRange(startDate, endDate) {
+            const dates = [];
+            const current = new Date(startDate);
+            const end = new Date(endDate);
+            
+            while (current <= end) {
+                dates.push(current.toISOString().split('T')[0]);
+                current.setDate(current.getDate() + 1);
+            }
+            
+            return dates;
+        }
+        
+        // 핵로그 유저 로드
+        function loadHackUsers() {
+            const file = document.getElementById('hackUserFile').files[0];
+            if (!file) return;
+            
+            Papa.parse(file, {
+                header: false,
+                complete: function(results) {
+                    hackUsers.clear();
+                    // 2행부터 시작 (A열 유저코드)
+                    for (let i = 1; i < results.data.length; i++) {
+                        const userId = results.data[i][0];
+                        if (userId && userId.trim()) {
+                            hackUsers.add(userId.trim());
+                        }
+                    }
+                    updateReferenceDataStatus('핵로그 유저', hackUsers.size);
+                }
+            });
+        }
+        
+        // 마켓시세 로드
+        function loadMarketPrices() {
+            const file = document.getElementById('marketPriceFile').files[0];
+            if (!file) return;
+            
+            Papa.parse(file, {
+                header: true,
+                complete: function(results) {
+                    marketPrices.clear();
+                    results.data.forEach(row => {
+                        if (row.item_name_ko && row.fair_price_meso) {
+                            marketPrices.set(row.item_name_ko, {
+                                meso: parseInt(row.fair_price_meso),
+                                snow: parseFloat(row.fair_price_snow) || 0,
+                                source: row.source
+                            });
+                        }
+                    });
+                    updateReferenceDataStatus('마켓시세', marketPrices.size);
+                }
+            });
+        }
+        
+        // 아이템 정보 로드
+        function loadItemInfo() {
+            const file = document.getElementById('itemInfoFile').files[0];
+            if (!file) return;
+            
+            Papa.parse(file, {
+                header: true,
+                complete: function(results) {
+                    itemInfo.clear();
+                    results.data.forEach(row => {
+                        if (row.Name && row.Korea) {
+                            itemInfo.set(row.Name, {
+                                koreaName: row.Korea,
+                                sellPrice: parseInt(row.SellPrice) || 0,
+                                mainType: row.MainType,
+                                isEquipment: row.MainType === '장비'
+                            });
+                        }
+                    });
+                    updateReferenceDataStatus('아이템 정보', itemInfo.size);
+                }
+            });
+        }
+        
+        // 참고 데이터 상태 업데이트
+        function updateReferenceDataStatus(type, count) {
+            const statusDiv = document.getElementById('referenceDataStatus');
+            const existingStatus = statusDiv.querySelector(`[data-type="${type}"]`);
+            const newStatus = `<div class="tag info" data-type="${type}">${type}: ${count}개 로드됨</div>`;
+            
+            if (existingStatus) {
+                existingStatus.outerHTML = newStatus;
+            } else {
+                statusDiv.innerHTML += newStatus;
+            }
+        }
+        
+        // 눈 결정 뿌리기 환율 계산
+        function calculateSnowExchangeRate() {
+            if (tradeData.length === 0) {
+                alert('거래 데이터를 먼저 로드해주세요.');
+                return;
+            }
+            
+            const snowExchanges = findSnowCrystalExchanges(tradeData);
+            if (snowExchanges.length === 0) {
+                document.getElementById('snowRateResults').innerHTML = 
+                    '<div class="tag warning">눈 결정 뿌리기 순수 교환 거래를 찾을 수 없습니다.</div>';
+                return;
+            }
+            
+            const rates = [];
+            snowExchanges.forEach(trade => {
+                const snowCount = extractSnowCrystalCount(trade);
+                const mesoAmount = Math.max(trade.sender_meso || 0, trade.receiver_meso || 0);
+                
+                if (snowCount > 0 && mesoAmount > 0) {
+                    rates.push(mesoAmount / snowCount);
+                }
+            });
+            
+            if (rates.length > 0) {
+                snowToMesoRate = calculateMedianAfterTrimming(rates, 0.1);
+                updateStatus('priceStatus', 'success', '환율 계산 완료');
+                
+                document.getElementById('snowRateResults').innerHTML = `
+                    <div class="card">
+                        <h4>환율 분석 결과</h4>
+                        <div class="tag info">눈 결정 뿌리기 1개 = ${snowToMesoRate.toLocaleString()} 메소</div>
+                        <div style="margin-top: 10px;">
+                            <strong>분석 거래:</strong> ${snowExchanges.length}건<br>
+                            <strong>유효 환율:</strong> ${rates.length}개<br>
+                            <strong>환율 범위:</strong> ${Math.min(...rates).toLocaleString()} ~ ${Math.max(...rates).toLocaleString()} 메소
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // 눈 결정 뿌리기 교환 거래 찾기
+        function findSnowCrystalExchanges(trades) {
+            return trades.filter(trade => {
+                const senderHasOnlyMeso = (trade.sender_meso > 0) && (!trade.sender_trade_info || trade.sender_trade_info.trim() === '');
+                const receiverHasOnlySnow = (trade.receiver_meso === 0 || !trade.receiver_meso) && 
+                    trade.receiver_trade_info && 
+                    trade.receiver_trade_info.includes('눈 결정 뿌리기') &&
+                    !hasOtherItems(trade.receiver_trade_info, '눈 결정 뿌리기');
+                
+                const senderHasOnlySnow = (trade.sender_meso === 0 || !trade.sender_meso) && 
+                    trade.sender_trade_info && 
+                    trade.sender_trade_info.includes('눈 결정 뿌리기') &&
+                    !hasOtherItems(trade.sender_trade_info, '눈 결정 뿌리기');
+                const receiverHasOnlyMeso = (trade.receiver_meso > 0) && (!trade.receiver_trade_info || trade.receiver_trade_info.trim() === '');
+                
+                return (senderHasOnlyMeso && receiverHasOnlySnow) || 
+                       (senderHasOnlySnow && receiverHasOnlyMeso);
+            });
+        }
+        
+        // 다른 아이템 포함 여부 확인
+        function hasOtherItems(tradeInfo, excludeItem) {
+            if (!tradeInfo) return false;
+            const items = tradeInfo.match(/\[([^\]]+)\]/g) || [];
+            return items.some(item => !item.includes(excludeItem));
+        }
+        
+        // 눈 결정 뿌리기 개수 추출
+        function extractSnowCrystalCount(trade) {
+            const info = trade.sender_trade_info || trade.receiver_trade_info || '';
+            const match = info.match(/눈 결정 뿌리기[^]]*?(\d+)개/);
+            return match ? parseInt(match[1]) : 0;
+        }
+        
+        // 중앙값 계산 (극단값 제거)
+        function calculateMedianAfterTrimming(values, trimRate) {
+            if (values.length === 0) return 0;
+            
+            const sorted = [...values].sort((a, b) => a - b);
+            const trimCount = Math.floor(sorted.length * trimRate);
+            const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
+            
+            if (trimmed.length === 0) return sorted[Math.floor(sorted.length / 2)];
+            
+            const mid = Math.floor(trimmed.length / 2);
+            return trimmed.length % 2 === 0 
+                ? (trimmed[mid - 1] + trimmed[mid]) / 2 
+                : trimmed[mid];
+        }
+        
+        // 일간 시세 계산
+        function calculateDailyPrices() {
+            const date = document.getElementById('dailyPriceDate').value;
+            if (!date) {
+                alert('날짜를 선택해주세요.');
+                return;
+            }
+            
+            if (snowToMesoRate === 0) {
+                alert('먼저 눈 결정 뿌리기 환율을 계산해주세요.');
+                return;
+            }
+            
+            const dayTrades = tradeData.filter(trade => trade.created_at.startsWith(date));
+            if (dayTrades.length === 0) {
+                alert('해당 날짜의 거래 데이터가 없습니다.');
+                return;
+            }
+            
+            const prices = calculateItemPrices(dayTrades, snowToMesoRate);
+            dailyPrices.set(date, prices);
+            
+            displayPriceResults('dailyPriceResults', prices, `${date} 일간 시세`);
+        }
+        
+        // 주간 시세 계산
+        function calculateWeeklyPrices() {
+            const week = document.getElementById('weeklyPriceWeek').value;
+            if (!week) {
+                alert('주를 선택해주세요.');
+                return;
+            }
+            
+            const [year, weekNum] = week.split('-W');
+            const weekStart = getWeekStart(year, weekNum);
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekEnd.getDate() + 6);
+            
+            const weekTrades = tradeData.filter(trade => {
+                const tradeDate = new Date(trade.created_at);
+                return tradeDate >= weekStart && tradeDate <= weekEnd;
+            });
+            
+            if (weekTrades.length === 0) {
+                alert('해당 주의 거래 데이터가 없습니다.');
+                return;
+            }
+            
+            const prices = calculateItemPrices(weekTrades, snowToMesoRate);
+            weeklyPrices.set(week, prices);
+            
+            displayPriceResults('weeklyPriceResults', prices, `${year}년 ${weekNum}주 주간 시세`);
+        }
+        
+        // 아이템 시세 계산
+        function calculateItemPrices(trades, exchangeRate) {
+            const itemTrades = new Map();
+            
+            // 순수 거래 찾기 (메소/눈결정 ↔ 아이템)
+            trades.forEach(trade => {
+                const pureTrade = analyzePureTrade(trade, exchangeRate);
+                if (pureTrade) {
+                    if (!itemTrades.has(pureTrade.itemName)) {
+                        itemTrades.set(pureTrade.itemName, []);
+                    }
+                    itemTrades.get(pureTrade.itemName).push(pureTrade);
+                }
+            });
+            
+            // 시세 계산
+            const prices = new Map();
+            itemTrades.forEach((trades, itemName) => {
+                if (trades.length >= settings.minDailyTrades) {
+                    const prices_list = trades.map(t => t.pricePerUnit);
+                    const price = calculateMedianAfterTrimming(prices_list, settings.outlierRemovalRate);
+                    const confidence = calculatePriceConfidence(trades);
+                    
+                    prices.set(itemName, {
+                        price: price,
+                        tradeCount: trades.length,
+                        confidence: confidence,
+                        priceRange: {
+                            min: Math.min(...prices_list),
+                            max: Math.max(...prices_list)
+                        }
+                    });
+                }
+            });
+            
+            return prices;
+        }
+        
+        // 순수 거래 분석
+        function analyzePureTrade(trade, exchangeRate) {
+            // 패턴 1: 메소만 ↔ 아이템만
+            if ((trade.sender_meso > 0 && !trade.sender_trade_info) && 
+                (trade.receiver_meso === 0 && trade.receiver_trade_info)) {
+                const item = extractSingleItem(trade.receiver_trade_info);
+                if (item && item.quantity > 0) {
+                    return {
+                        itemName: item.name,
+                        quantity: item.quantity,
+                        totalValue: trade.sender_meso,
+                        pricePerUnit: trade.sender_meso / item.quantity,
+                        type: 'meso_to_item'
+                    };
+                }
+            }
+            
+            // 패턴 2: 아이템만 ↔ 메소만
+            if ((trade.sender_meso === 0 && trade.sender_trade_info) && 
+                (trade.receiver_meso > 0 && !trade.receiver_trade_info)) {
+                const item = extractSingleItem(trade.sender_trade_info);
+                if (item && item.quantity > 0) {
+                    return {
+                        itemName: item.name,
+                        quantity: item.quantity,
+                        totalValue: trade.receiver_meso,
+                        pricePerUnit: trade.receiver_meso / item.quantity,
+                        type: 'item_to_meso'
+                    };
+                }
+            }
+            
+            // 패턴 3: 눈결정만 ↔ 아이템만
+            if (trade.sender_trade_info && trade.sender_trade_info.includes('눈 결정 뿌리기') &&
+                !hasOtherItems(trade.sender_trade_info, '눈 결정 뿌리기') && 
+                trade.receiver_trade_info && !trade.receiver_trade_info.includes('눈 결정 뿌리기')) {
+                const snowCount = extractSnowCrystalCount(trade);
+                const item = extractSingleItem(trade.receiver_trade_info);
+                if (item && item.quantity > 0 && snowCount > 0) {
+                    const mesoValue = snowCount * exchangeRate;
+                    return {
+                        itemName: item.name,
+                        quantity: item.quantity,
+                        totalValue: mesoValue,
+                        pricePerUnit: mesoValue / item.quantity,
+                        type: 'snow_to_item'
+                    };
+                }
+            }
+            
+            return null;
+        }
+        
+        // 단일 아이템 추출
+        function extractSingleItem(tradeInfo) {
+            if (!tradeInfo) return null;
+            
+            const matches = tradeInfo.match(/\[([^\]]+)\]/g);
+            if (!matches || matches.length !== 1) return null; // 정확히 1개 아이템만
+            
+            const match = matches[0];
+            const parts = match.slice(1, -1).split('/'); // [, ] 제거하고 / 로 분할
+            
+            if (parts.length < 2) return null;
+            
+            const name = parts[1]; // 아이템명
+            const quantityMatch = match.match(/(\d+)개/);
+            const quantity = quantityMatch ? parseInt(quantityMatch[1]) : 1;
+            
+            return { name, quantity };
+        }
+        
+        // 시세 신뢰도 계산
+        function calculatePriceConfidence(trades) {
+            if (trades.length < 3) return 0.3;
+            
+            const prices = trades.map(t => t.pricePerUnit);
+            const mean = prices.reduce((a, b) => a + b) / prices.length;
+            const variance = prices.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / prices.length;
+            const cv = Math.sqrt(variance) / mean; // 변동계수
+            
+            let confidence = 1.0;
+            if (cv > 0.5) confidence *= 0.5;
+            else if (cv > 0.3) confidence *= 0.7;
+            else if (cv < 0.1) confidence *= 1.2;
+            
+            // 거래량 보정
+            if (trades.length >= 20) confidence *= 1.1;
+            else if (trades.length < 5) confidence *= 0.8;
+            
+            return Math.min(confidence, 1.0);
+        }
+        
+        // 시세 결과 표시
+        function displayPriceResults(containerId, prices, title) {
+            const container = document.getElementById(containerId);
+            
+            if (prices.size === 0) {
+                container.innerHTML = '<div class="tag warning">계산된 시세가 없습니다.</div>';
+                return;
+            }
+            
+            let html = `<h4>${title} (${prices.size}개 아이템)</h4>`;
+            html += '<table class="results-table">';
+            html += '<thead><tr><th>아이템명</th><th>시세 (메소)</th><th>거래량</th><th>신뢰도</th><th>가격 범위</th></tr></thead>';
+            html += '<tbody>';
+            
+            // 거래량 순으로 정렬
+            const sortedPrices = Array.from(prices.entries())
+                .sort((a, b) => b[1].tradeCount - a[1].tradeCount);
+            
+            sortedPrices.slice(0, 20).forEach(([itemName, data]) => {
+                const confidenceClass = data.confidence > 0.8 ? 'info' : data.confidence > 0.5 ? 'warning' : 'danger';
+                html += `
+                    <tr>
+                        <td>${itemName}</td>
+                        <td>${data.price.toLocaleString()}</td>
+                        <td>${data.tradeCount}건</td>
+                        <td><span class="tag ${confidenceClass}">${(data.confidence * 100).toFixed(0)}%</span></td>
+                        <td>${data.priceRange.min.toLocaleString()} ~ ${data.priceRange.max.toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            
+            if (sortedPrices.length > 20) {
+                html += `<div style="margin-top: 10px;" class="tag info">상위 20개 아이템만 표시됨 (전체 ${sortedPrices.length}개)</div>`;
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        // 아이템 시세 검색
+        function searchItemPrices() {
+            const searchTerm = document.getElementById('itemSearch').value.trim();
+            if (!searchTerm) {
+                alert('아이템명을 입력해주세요.');
+                return;
+            }
+            
+            const results = new Map();
+            
+            // 일간 시세에서 검색
+            dailyPrices.forEach((prices, date) => {
+                prices.forEach((data, itemName) => {
+                    if (itemName.includes(searchTerm)) {
+                        if (!results.has(itemName)) results.set(itemName, []);
+                        results.get(itemName).push({ date, type: '일간', ...data });
+                    }
+                });
+            });
+            
+            // 주간 시세에서 검색
+            weeklyPrices.forEach((prices, week) => {
+                prices.forEach((data, itemName) => {
+                    if (itemName.includes(searchTerm)) {
+                        if (!results.has(itemName)) results.set(itemName, []);
+                        results.get(itemName).push({ date: week, type: '주간', ...data });
+                    }
+                });
+            });
+            
+            displaySearchResults(results, searchTerm);
+        }
+        
+        // 검색 결과 표시
+        function displaySearchResults(results, searchTerm) {
+            const container = document.getElementById('itemSearchResults');
+            
+            if (results.size === 0) {
+                container.innerHTML = `<div class="tag warning">"${searchTerm}" 검색 결과가 없습니다.</div>`;
+                return;
+            }
+            
+            let html = `<h4>"${searchTerm}" 검색 결과 (${results.size}개 아이템)</h4>`;
+            
+            results.forEach((priceHistory, itemName) => {
+                html += `<div class="card" style="margin: 10px 0;">`;
+                html += `<h5>${itemName}</h5>`;
+                html += '<table class="results-table">';
+                html += '<thead><tr><th>기간</th><th>유형</th><th>시세</th><th>거래량</th><th>신뢰도</th></tr></thead>';
+                html += '<tbody>';
+                
+                priceHistory.forEach(data => {
+                    const confidenceClass = data.confidence > 0.8 ? 'info' : data.confidence > 0.5 ? 'warning' : 'danger';
+                    html += `
+                        <tr>
+                            <td>${data.date}</td>
+                            <td><span class="tag ${data.type === '일간' ? 'info' : 'warning'}">${data.type}</span></td>
+                            <td>${data.price.toLocaleString()}</td>
+                            <td>${data.tradeCount}건</td>
+                            <td><span class="tag ${confidenceClass}">${(data.confidence * 100).toFixed(0)}%</span></td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table></div>';
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        // 유저 분석
+        function analyzeUsers() {
+            const userIds = document.getElementById('userIds').value.split(',').map(id => id.trim()).filter(id => id);
+            if (userIds.length === 0) {
+                alert('유저 ID를 입력해주세요.');
+                return;
+            }
+            
+            if (tradeData.length === 0) {
+                alert('거래 데이터를 먼저 로드해주세요.');
+                return;
+            }
+            
+            updateStatus('analysisStatus', 'loading', '분석 중...');
+            
+            const analysisResults = [];
+            
+            userIds.forEach(userId => {
+                const result = analyzeUser(userId);
+                if (result) {
+                    analysisResults.push(result);
+                }
+            });
+            
+            displayAnalysisResults(analysisResults);
+            updateStatus('analysisStatus', 'success', '분석 완료');
+        }
+        
+        // 개별 유저 분석
+        function analyzeUser(userId) {
+            const period = parseInt(document.getElementById('analysisPeriod').value);
+            const filter = document.getElementById('analysisFilter').value;
+            
+            // 분석 기간 내 거래 필터링
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - period);
+            
+            let userTrades = tradeData.filter(trade => {
+                const tradeDate = new Date(trade.created_at);
+                return tradeDate >= cutoffDate && 
+                       (trade.sender_id === userId || trade.receiver_id === userId);
+            });
+            
+            // 필터 적용
+            if (filter === 'hack_related') {
+                userTrades = userTrades.filter(trade => 
+                    hackUsers.has(trade.sender_id) || hackUsers.has(trade.receiver_id)
+                );
+            }
+            
+            if (userTrades.length === 0) {
+                return {
+                    userId: userId,
+                    totalTrades: 0,
+                    suspiciousTrades: [],
+                    riskLevel: 'NORMAL',
+                    analysis: '분석 기간 내 거래 없음'
+                };
+            }
+            
+            // 어뷰징 패턴 분석
+            const suspiciousTrades = [];
+            const patterns = {
+                moneyConcentration: analyzeMoneyConcentration(userId, userTrades),
+                priceAnomalies: analyzePriceAnomalies(userTrades),
+                repeatedPatterns: analyzeRepeatedPatterns(userId, userTrades),
+                hackConnections: analyzeHackConnections(userId, userTrades)
+            };
+            
+            // 의심 점수 계산
+            let totalSuspicionScore = 0;
+            const suspiciousReasons = [];
+            
+            if (patterns.moneyConcentration.score > 0) {
+                totalSuspicionScore += patterns.moneyConcentration.score;
+                suspiciousReasons.push(patterns.moneyConcentration.reason);
+                suspiciousTrades.push(...patterns.moneyConcentration.trades);
+            }
+            
+            if (patterns.priceAnomalies.length > 0) {
+                totalSuspicionScore += patterns.priceAnomalies.length * 20;
+                suspiciousReasons.push(`가격 이상 거래 ${patterns.priceAnomalies.length}건`);
+                suspiciousTrades.push(...patterns.priceAnomalies);
+            }
+            
+            if (patterns.repeatedPatterns.length > 0) {
+                totalSuspicionScore += patterns.repeatedPatterns.length * 30;
+                suspiciousReasons.push(`반복 패턴 ${patterns.repeatedPatterns.length}건`);
+            }
+            
+            if (patterns.hackConnections.length > 0) {
+                totalSuspicionScore += patterns.hackConnections.length * 40;
+                suspiciousReasons.push(`핵로그 연결 ${patterns.hackConnections.length}건`);
+                suspiciousTrades.push(...patterns.hackConnections);
+            }
+            
+            // 위험도 등급 결정
+            let riskLevel = 'NORMAL';
+            if (totalSuspicionScore >= 150) riskLevel = 'HIGH';
+            else if (totalSuspicionScore >= 80) riskLevel = 'MEDIUM';
+            else if (totalSuspicionScore >= 40) riskLevel = 'LOW';
+            
+            return {
+                userId: userId,
+                totalTrades: userTrades.length,
+                suspiciousTrades: [...new Set(suspiciousTrades)], // 중복 제거
+                riskLevel: riskLevel,
+                suspicionScore: totalSuspicionScore,
+                suspiciousReasons: suspiciousReasons,
+                patterns: patterns
+            };
+        }
+        
+        // 자금 집중도 분석
+        function analyzeMoneyConcentration(userId, trades) {
+            let totalReceived = 0;
+            let totalGiven = 0;
+            let incomingTrades = [];
+            
+            trades.forEach(trade => {
+                if (trade.receiver_id === userId) {
+                    const value = calculateTradeValue(trade.sender_meso, trade.sender_trade_info);
+                    totalReceived += value;
+                    if (value > 100000) { // 10만 이상만 집계
+                        incomingTrades.push(trade);
+                    }
+                } else if (trade.sender_id === userId) {
+                    const value = calculateTradeValue(trade.receiver_meso, trade.receiver_trade_info);
+                    totalGiven += value;
+                }
+            });
+            
+            const ratio = totalGiven > 0 ? totalReceived / totalGiven : (totalReceived > 0 ? 999 : 0);
+            
+            if (ratio > settings.valueImbalanceThreshold && totalReceived > settings.giftingMinValue) {
+                return {
+                    score: 80,
+                    reason: `대량 자금 집중 (받음:${totalReceived.toLocaleString()}, 줌:${totalGiven.toLocaleString()}, 비율:${ratio.toFixed(1)})`,
+                    trades: incomingTrades
+                };
+            }
+            
+            return { score: 0, reason: '', trades: [] };
+        }
+        
+        // 거래 가치 계산
+        function calculateTradeValue(meso, tradeInfo) {
+            let totalValue = parseInt(meso) || 0;
+            
+            if (tradeInfo && snowToMesoRate > 0) {
+                const snowCount = extractSnowCrystalCount({ sender_trade_info: tradeInfo });
+                totalValue += snowCount * snowToMesoRate;
+                
+                // 다른 아이템들의 추정 가치 (시세가 있는 경우)
+                const items = extractAllItems(tradeInfo);
+                items.forEach(item => {
+                    if (item.name !== '눈 결정 뿌리기') {
+                        const price = getItemPrice(item.name);
+                        if (price > 0) {
+                            totalValue += price * item.quantity;
+                        }
+                    }
+                });
+            }
+            
+            return totalValue;
+        }
+        
+        // 모든 아이템 추출
+        function extractAllItems(tradeInfo) {
+            if (!tradeInfo) return [];
+            
+            const items = [];
+            const matches = tradeInfo.match(/\[([^\]]+)\]/g) || [];
+            
+            matches.forEach(match => {
+                const parts = match.slice(1, -1).split('/');
+                if (parts.length >= 2) {
+                    const name = parts[1];
+                    const quantityMatch = match.match(/(\d+)개/);
+                    const quantity = quantityMatch ? parseInt(quantityMatch[1]) : 1;
+                    items.push({ name, quantity });
+                }
+            });
+            
+            return items;
+        }
+        
+        // 아이템 시세 조회
+        function getItemPrice(itemName) {
+            // 최신 일간 시세 우선
+            for (const [date, prices] of dailyPrices) {
+                if (prices.has(itemName)) {
+                    return prices.get(itemName).price;
+                }
+            }
+            
+            // 주간 시세 참조
+            for (const [week, prices] of weeklyPrices) {
+                if (prices.has(itemName)) {
+                    return prices.get(itemName).price;
+                }
+            }
+            
+            // 마켓시세 참조
+            if (marketPrices.has(itemName)) {
+                return marketPrices.get(itemName).meso;
+            }
+            
+            return 0;
+        }
+        
+        // 가격 이상 거래 분석
+        function analyzePriceAnomalies(trades) {
+            const anomalies = [];
+            
+            trades.forEach(trade => {
+                const senderValue = calculateTradeValue(trade.sender_meso, trade.sender_trade_info);
+                const receiverValue = calculateTradeValue(trade.receiver_meso, trade.receiver_trade_info);
+                
+                if (senderValue > 0 && receiverValue > 0) {
+                    const ratio = Math.max(senderValue, receiverValue) / Math.min(senderValue, receiverValue);
+                    
+                    if (ratio > settings.valueImbalanceThreshold) {
+                        trade.anomalyType = '극단적_가치차이';
+                        trade.anomalyRatio = ratio;
+                        trade.senderValue = senderValue;
+                        trade.receiverValue = receiverValue;
+                        anomalies.push(trade);
+                    }
+                } else if (senderValue > 1000000 && receiverValue < 10000) {
+                    trade.anomalyType = '고가아이템_무료이전';
+                    trade.senderValue = senderValue;
+                    trade.receiverValue = receiverValue;
+                    anomalies.push(trade);
+                }
+            });
+            
+            return anomalies;
+        }
+        
+        // 반복 패턴 분석
+        function analyzeRepeatedPatterns(userId, trades) {
+            const connections = new Map();
+            
+            trades.forEach(trade => {
+                if (trade.sender_id === userId) {
+                    const partnerId = trade.receiver_id;
+                    if (!connections.has(partnerId)) {
+                        connections.set(partnerId, { sent: [], received: [] });
+                    }
+                    connections.get(partnerId).sent.push({
+                        value: calculateTradeValue(trade.receiver_meso, trade.receiver_trade_info),
+                        date: trade.created_at,
+                        trade: trade
+                    });
+                }
+                
+                if (trade.receiver_id === userId) {
+                    const partnerId = trade.sender_id;
+                    if (!connections.has(partnerId)) {
+                        connections.set(partnerId, { sent: [], received: [] });
+                    }
+                    connections.get(partnerId).received.push({
+                        value: calculateTradeValue(trade.sender_meso, trade.sender_trade_info),
+                        date: trade.created_at,
+                        trade: trade
+                    });
+                }
+            });
+            
+            const suspiciousPatterns = [];
+            
+            connections.forEach((data, partnerId) => {
+                // 일방적 수혜 패턴
+                if (data.received.length >= settings.giftingMinCount && data.sent.length === 0) {
+                    const totalValue = data.received.reduce((sum, r) => sum + r.value, 0);
+                    if (totalValue > settings.giftingMinValue) {
+                        suspiciousPatterns.push({
+                            type: '일방적_수혜',
+                            partnerId: partnerId,
+                            count: data.received.length,
+                            totalValue: totalValue,
+                            trades: data.received.map(r => r.trade)
+                        });
+                    }
+                }
+                
+                // 일방적 지원 패턴
+                if (data.sent.length >= settings.giftingMinCount && data.received.length === 0) {
+                    const totalValue = data.sent.reduce((sum, s) => sum + s.value, 0);
+                    if (totalValue > settings.giftingMinValue) {
+                        suspiciousPatterns.push({
+                            type: '일방적_지원',
+                            partnerId: partnerId,
+                            count: data.sent.length,
+                            totalValue: totalValue,
+                            trades: data.sent.map(s => s.trade)
+                        });
+                    }
+                }
+            });
+            
+            return suspiciousPatterns;
+        }
+        
+        // 핵로그 연결 분석
+        function analyzeHackConnections(userId, trades) {
+            if (hackUsers.size === 0) return [];
+            
+            const hackTrades = trades.filter(trade => 
+                hackUsers.has(trade.sender_id) || hackUsers.has(trade.receiver_id)
+            );
+            
+            return hackTrades;
+        }
+        
+        // 분석 결과 표시
+        function displayAnalysisResults(results) {
+            const container = document.getElementById('analysisContent');
+            
+            if (results.length === 0) {
+                container.innerHTML = '<div class="tag warning">분석할 유저가 없습니다.</div>';
+                return;
+            }
+            
+            let html = '';
+            
+            results.forEach(result => {
+                const riskClass = result.riskLevel === 'HIGH' ? 'risk-high' : 
+                                 result.riskLevel === 'MEDIUM' ? 'risk-medium' : 
+                                 result.riskLevel === 'LOW' ? 'risk-low' : '';
+                
+                html += `<div class="card ${riskClass}" style="margin-bottom: 20px;">`;
+                html += `<h4>👤 유저 ID: ${result.userId}</h4>`;
+                html += `<div style="margin: 10px 0;">`;
+                html += `<span class="tag info">총 거래: ${result.totalTrades}건</span>`;
+                html += `<span class="tag ${result.riskLevel === 'HIGH' ? 'danger' : result.riskLevel === 'MEDIUM' ? 'warning' : 'info'}">위험도: ${result.riskLevel}</span>`;
+                html += `<span class="tag">의심점수: ${result.suspicionScore}점</span>`;
+                html += `</div>`;
+                
+                if (result.suspiciousReasons.length > 0) {
+                    html += `<div><strong>의심 사유:</strong></div>`;
+                    html += `<ul>`;
+                    result.suspiciousReasons.forEach(reason => {
+                        html += `<li>${reason}</li>`;
+                    });
+                    html += `</ul>`;
+                }
+                
+                if (result.suspiciousTrades.length > 0) {
+                    html += `<div style="margin-top: 15px;"><strong>의심 거래 목록:</strong></div>`;
+                    html += '<table class="results-table">';
+                    html += '<thead><tr><th>날짜</th><th>상대방</th><th>거래 내용</th><th>의심 사유</th><th>제재 마킹</th></tr></thead>';
+                    html += '<tbody>';
+                    
+                    result.suspiciousTrades.slice(0, 10).forEach(trade => {
+                        const tradeKey = `${trade.sender_id}_${trade.receiver_id}_${trade.created_at}`;
+                        const partner = trade.sender_id === result.userId ? trade.receiver_id : trade.sender_id;
+                        const date = new Date(trade.created_at).toLocaleDateString();
+                        
+                        html += `<tr>`;
+                        html += `<td>${date}</td>`;
+                        html += `<td>${partner}</td>`;
+                        html += `<td>메소: ${(trade.sender_meso || 0).toLocaleString()} → ${(trade.receiver_meso || 0).toLocaleString()}</td>`;
+                        html += `<td>`;
+                        if (trade.anomalyType) {
+                            html += `<span class="tag danger">${trade.anomalyType}</span>`;
+                            if (trade.anomalyRatio) {
+                                html += ` (${trade.anomalyRatio.toFixed(1)}배 차이)`;
+                            }
+                        }
+                        if (hackUsers.has(trade.sender_id) || hackUsers.has(trade.receiver_id)) {
+                            html += `<span class="tag danger">핵로그 연결</span>`;
+                        }
+                        html += `</td>`;
+                        html += `<td>`;
+                        html += `<input type="checkbox" id="flag_${tradeKey}" onchange="flagTrade('${tradeKey}', this.checked)">`;
+                        html += `<label for="flag_${tradeKey}">제재 대상</label>`;
+                        html += `</td>`;
+                        html += `</tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                    
+                    if (result.suspiciousTrades.length > 10) {
+                        html += `<div class="tag info">상위 10건만 표시됨 (전체 ${result.suspiciousTrades.length}건)</div>`;
+                    }
+                }
+                
+                html += `</div>`;
+            });
+            
+            container.innerHTML = html;
+            document.getElementById('analysisResults').style.display = 'block';
+        }
+        
+        // 거래 플래그 처리
+        function flagTrade(tradeKey, isFlagged) {
+            if (isFlagged) {
+                flaggedTrades.add(tradeKey);
+            } else {
+                flaggedTrades.delete(tradeKey);
+            }
+            
+            updateSanctionsList();
+        }
+        
+        // 제재 목록 업데이트
+        function updateSanctionsList() {
+            const container = document.getElementById('sanctionsList');
+            
+            if (flaggedTrades.size === 0) {
+                container.innerHTML = '<div class="tag info">제재 대상 거래가 없습니다.</div>';
+                return;
+            }
+            
+            let html = `<h4>제재 대상 거래 목록 (${flaggedTrades.size}건)</h4>`;
+            html += '<table class="results-table">';
+            html += '<thead><tr><th>거래 키</th><th>처리 상태</th><th>액션</th></tr></thead>';
+            html += '<tbody>';
+            
+            Array.from(flaggedTrades).forEach(tradeKey => {
+                html += `<tr>`;
+                html += `<td>${tradeKey}</td>`;
+                html += `<td><span class="tag warning">처리 대기</span></td>`;
+                html += `<td>`;
+                html += `<button class="btn danger" onclick="removeFlaggedTrade('${tradeKey}')">제거</button>`;
+                html += `</td>`;
+                html += `</tr>`;
+            });
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+        
+        // 플래그된 거래 제거
+        function removeFlaggedTrade(tradeKey) {
+            flaggedTrades.delete(tradeKey);
+            updateSanctionsList();
+            
+            // 체크박스도 해제
+            const checkbox = document.getElementById(`flag_${tradeKey}`);
+            if (checkbox) {
+                checkbox.checked = false;
+            }
+        }
+        
+        // 제재 목록 내보내기
+        function exportSanctionList() {
+            if (flaggedTrades.size === 0) {
+                alert('제재 대상 거래가 없습니다.');
+                return;
+            }
+            
+            const data = Array.from(flaggedTrades).map(tradeKey => ({
+                거래키: tradeKey,
+                처리일시: new Date().toISOString(),
+                상태: '제재 대상'
+            }));
+            
+            const csv = Papa.unparse(data);
+            downloadCSV(csv, `제재목록_${new Date().toISOString().split('T')[0]}.csv`);
+        }
+        
+        // CSV 다운로드
+        function downloadCSV(csv, filename) {
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+        }
+        
+        // 제재 목록 초기화
+        function clearSanctions() {
+            if (confirm('제재 목록을 모두 초기화하시겠습니까?')) {
+                flaggedTrades.clear();
+                updateSanctionsList();
+                
+                // 모든 체크박스 해제
+                document.querySelectorAll('input[type="checkbox"][id^="flag_"]').forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+            }
+        }
+        
+        // 이의제기 처리
+        function processAppeals() {
+            const userIds = document.getElementById('appealUserIds').value.split(',').map(id => id.trim()).filter(id => id);
+            
+            if (userIds.length === 0) {
+                alert('유저 ID를 입력해주세요.');
+                return;
+            }
+            
+            const results = [];
+            
+            userIds.forEach(userId => {
+                const userFlags = Array.from(flaggedTrades).filter(tradeKey => tradeKey.includes(userId));
+                
+                results.push({
+                    userId: userId,
+                    flaggedCount: userFlags.length,
+                    flaggedTrades: userFlags
+                });
+            });
+            
+            displayAppealResults(results);
+        }
+        
+        // 이의제기 결과 표시
+        function displayAppealResults(results) {
+            const container = document.getElementById('appealContent');
+            
+            let html = '';
+            
+            results.forEach(result => {
+                html += `<div class="card" style="margin-bottom: 20px;">`;
+                html += `<h4>👤 유저 ID: ${result.userId}</h4>`;
+                
+                if (result.flaggedCount === 0) {
+                    html += `<div class="tag info">해당 유저에 대한 제재 근거가 없습니다.</div>`;
+                } else {
+                    html += `<div class="tag warning">제재 근거: ${result.flaggedCount}건</div>`;
+                    html += `<div style="margin-top: 10px;"><strong>제재 근거 거래:</strong></div>`;
+                    html += `<ul>`;
+                    result.flaggedTrades.forEach(tradeKey => {
+                        html += `<li>${tradeKey}</li>`;
+                    });
+                    html += `</ul>`;
+                    
+                    html += `<div style="margin-top: 15px;">`;
+                    html += `<button class="btn success" onclick="approveAppeal('${result.userId}')">이의제기 승인</button>`;
+                    html += `<button class="btn danger" onclick="rejectAppeal('${result.userId}')">이의제기 기각</button>`;
+                    html += `</div>`;
+                }
+                
+                html += `</div>`;
+            });
+            
+            container.innerHTML = html;
+            document.getElementById('appealResults').style.display = 'block';
+        }
+        
+        // 이의제기 승인
+        function approveAppeal(userId) {
+            const userFlags = Array.from(flaggedTrades).filter(tradeKey => tradeKey.includes(userId));
+            userFlags.forEach(tradeKey => {
+                flaggedTrades.delete(tradeKey);
+            });
+            
+            updateSanctionsList();
+            alert(`${userId}의 이의제기가 승인되었습니다. 제재가 해제되었습니다.`);
+        }
+        
+        // 이의제기 기각
+        function rejectAppeal(userId) {
+            alert(`${userId}의 이의제기가 기각되었습니다.`);
+        }
+        
+        // 설정 업데이트 함수들
+        function updateThresholdDisplay() {
+            const value = document.getElementById('valueImbalanceThreshold').value;
+            document.getElementById('valueImbalanceDisplay').textContent = `${value}배`;
+            settings.valueImbalanceThreshold = parseInt(value);
+        }
+        
+        function updateExchangeRateDisplay() {
+            const value = document.getElementById('exchangeRateRange').value;
+            document.getElementById('exchangeRateDisplay').textContent = `±${value}%`;
+            settings.exchangeRateRange = parseFloat(value) / 100;
+        }
+        
+        function updateOutlierDisplay() {
+            const value = document.getElementById('outlierRemovalRate').value;
+            document.getElementById('outlierDisplay').textContent = `${value}%`;
+            settings.outlierRemovalRate = parseFloat(value) / 100;
+        }
+        
+        function updateVariationDisplay() {
+            const value = document.getElementById('priceVariationRange').value;
+            document.getElementById('variationDisplay').textContent = `${value}%`;
+            settings.priceVariationRange = parseFloat(value) / 100;
+        }
+        
+        // 설정 저장
+        function saveSettings() {
+            settings.giftingMinCount = parseInt(document.getElementById('giftingMinCount').value);
+            settings.giftingMinValue = parseInt(document.getElementById('giftingMinValue').value);
+            
+            localStorage.setItem('abuseDetectionSettings', JSON.stringify(settings));
+            alert('어뷰징 탐지 설정이 저장되었습니다.');
+        }
+        
+        function savePriceSettings() {
+            settings.minDailyTrades = parseInt(document.getElementById('minDailyTrades').value);
+            settings.minWeeklyTrades = parseInt(document.getElementById('minWeeklyTrades').value);
+            
+            localStorage.setItem('abuseDetectionSettings', JSON.stringify(settings));
+            alert('시세 계산 설정이 저장되었습니다.');
+        }
+        
+        // 설정 로드
+        function loadSettings() {
+            const saved = localStorage.getItem('abuseDetectionSettings');
+            if (saved) {
+                const savedSettings = JSON.parse(saved);
+                settings = { ...settings, ...savedSettings };
+                
+                // UI 업데이트
+                document.getElementById('valueImbalanceThreshold').value = settings.valueImbalanceThreshold;
+                document.getElementById('giftingMinCount').value = settings.giftingMinCount;
+                document.getElementById('giftingMinValue').value = settings.giftingMinValue;
+                document.getElementById('exchangeRateRange').value = settings.exchangeRateRange * 100;
+                document.getElementById('minDailyTrades').value = settings.minDailyTrades;
+                document.getElementById('minWeeklyTrades').value = settings.minWeeklyTrades;
+                document.getElementById('outlierRemovalRate').value = settings.outlierRemovalRate * 100;
+                document.getElementById('priceVariationRange').value = settings.priceVariationRange * 100;
+            }
+        }
+        
+        // 상태 업데이트
+        function updateStatus(statusId, state, text) {
+            const indicator = document.getElementById(statusId);
+            const textElement = document.getElementById(statusId + 'Text');
+            
+            indicator.className = `status-indicator ${state}`;
+            textElement.textContent = text;
+        }
+        
+        // 로딩 상태 설정
+        function setLoadingState(isLoading) {
+            const button = document.querySelector('button[onclick="loadTradeData()"]');
+            const spinner = document.getElementById('loadSpinner');
+            const progress = document.getElementById('loadProgress');
+            
+            if (isLoading) {
+                button.disabled = true;
+                spinner.style.display = 'inline-block';
+                progress.style.display = 'block';
+            } else {
+                button.disabled = false;
+                spinner.style.display = 'none';
+                progress.style.display = 'none';
+            }
+        }
+        
+        // 로딩 진행률 업데이트
+        function updateLoadProgress(percent) {
+            document.getElementById('loadProgressFill').style.width = `${percent}%`;
+        }
+        
+        // 메트릭 업데이트
+        function updateMetrics() {
+            document.getElementById('totalTrades').textContent = tradeData.length.toLocaleString();
+            
+            const suspiciousCount = tradeData.filter(trade => {
+                // 간단한 의심 거래 판별
+                const senderValue = calculateTradeValue(trade.sender_meso, trade.sender_trade_info);
+                const receiverValue = calculateTradeValue(trade.receiver_meso, trade.receiver_trade_info);
+                
+                if (senderValue > 0 && receiverValue > 0) {
+                    const ratio = Math.max(senderValue, receiverValue) / Math.min(senderValue, receiverValue);
+                    return ratio > 5; // 5배 이상 차이
+                }
+                
+                return false;
+            }).length;
+            
+            document.getElementById('suspiciousTrades').textContent = suspiciousCount.toLocaleString();
+            
+            const uniqueUsers = new Set();
+            tradeData.forEach(trade => {
+                uniqueUsers.add(trade.sender_id);
+                uniqueUsers.add(trade.receiver_id);
+            });
+            
+            document.getElementById('flaggedUsers').textContent = uniqueUsers.size.toLocaleString();
+            
+            // 마지막 업데이트 시간
+            document.getElementById('lastUpdateTime').textContent = `마지막 업데이트: ${new Date().toLocaleString()}`;
+        }
+        
+        // 주 시작일 계산
+        function getWeekStart(year, week) {
+            const jan1 = new Date(year, 0, 1);
+            const daysToFirstWeek = (11 - jan1.getDay()) % 7;
+            const firstWeek = new Date(year, 0, 1 + daysToFirstWeek);
+            
+            const weekStart = new Date(firstWeek);
+            weekStart.setDate(firstWeek.getDate() + (week - 1) * 7);
+            
+            return weekStart;
+        }
+    </script>
+</body>
+</html>
