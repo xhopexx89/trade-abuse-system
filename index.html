@@ -6,7 +6,7 @@
     <title>아르테일 거래 어뷰징 탐지 시스템</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <script src="https://apis.google.com/js/api.js"></script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="initGoogleAPI()"></script>
     <style>
         * {
             margin: 0;
@@ -712,51 +712,34 @@
             updateExchangeRateDisplay();
             updateOutlierDisplay();
             updateVariationDisplay();
-            initializeGoogleAPI();
+            // initializeGoogleAPI는 Google API 스크립트 로드 후 자동 호출됨
         });
         
-        // Google API 초기화
-        function initializeGoogleAPI() {
-            // gapi가 로드될 때까지 기다리기
-            function waitForGapi() {
-                if (typeof gapi !== 'undefined') {
-                    loadGoogleAPI();
-                } else {
-                    setTimeout(waitForGapi, 100);
-                }
-            }
-            
-            waitForGapi();
-        }
-        
-        async function loadGoogleAPI() {
-            try {
-                await new Promise((resolve) => {
-                    gapi.load('client:auth2', resolve);
-                });
-                
-                await gapi.client.init({
+        // Google API 스크립트 로드 완료 후 호출되는 함수
+        function initGoogleAPI() {
+            gapi.load('client:auth2', function() {
+                gapi.client.init({
                     apiKey: API_KEY,
                     clientId: CLIENT_ID,
                     discoveryDocs: [DISCOVERY_DOC],
                     scope: SCOPES
+                }).then(function() {
+                    isGoogleApiLoaded = true;
+                    updateStatus('dataStatus', 'success', 'Google Drive 연결 준비 완료');
+                    
+                    // 로그인 상태 확인
+                    const authInstance = gapi.auth2.getAuthInstance();
+                    if (authInstance.isSignedIn.get()) {
+                        updateStatus('dataStatus', 'success', 'Google Drive 연결됨');
+                    } else {
+                        updateStatus('dataStatus', 'loading', 'Google 로그인 필요');
+                    }
+                    
+                }).catch(function(error) {
+                    console.error('Google API 초기화 실패:', error);
+                    updateStatus('dataStatus', 'error', 'Google API 연결 실패');
                 });
-                
-                isGoogleApiLoaded = true;
-                updateStatus('dataStatus', 'success', 'Google Drive 연결 준비 완료');
-                
-                // 로그인 상태 확인
-                const authInstance = gapi.auth2.getAuthInstance();
-                if (authInstance.isSignedIn.get()) {
-                    updateStatus('dataStatus', 'success', 'Google Drive 연결됨');
-                } else {
-                    updateStatus('dataStatus', 'loading', 'Google 로그인 필요');
-                }
-                
-            } catch (error) {
-                console.error('Google API 초기화 실패:', error);
-                updateStatus('dataStatus', 'error', 'Google API 연결 실패');
-            }
+            });
         }
         
         // Google 로그인
