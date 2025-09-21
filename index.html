@@ -1,4 +1,146 @@
-<!DOCTYPE html>
+// 폴더를 포함한 Google Drive 파일 검색
+        async function loadParquetFile(date) {
+            if (!gapiInitialized || gapi.client.getToken() === null) {
+                throw new Error('Google 로그인이 필요합니다.');
+            }
+            
+            try {
+                console.log(`${date} 파일 검색 시작...`);
+                
+                // 1단계: 먼저 일반적인 폴더명으로 검색
+                const commonFolderNames = [
+                    'trade-data',
+                    'trading-data', 
+                    'trade_data',
+                    'trades',
+                    'data',
+                    '거래데이터',
+                    '거래로그',
+                    date.substring(0, 7), // 2025-09 (년-월 폴더)
+                    date.substring(0, 4)  // 2025 (년 폴더)
+                ];
+                
+                let foundFiles = [];
+                let searchFolders = ['root']; // 루트부터 시작
+                
+                // 폴더 검색
+                for (const folderName of commonFolderNames) {
+                    const folderResponse = await gapi.client.drive.files.list({
+                        q: `name contains '${folderName}' and mimeType='application/vnd.google-apps.folder'`,
+                        spaces: 'drive',
+                        fields: 'files(id, name)'
+                    });
+                    
+                    if (folderResponse.result.files && folderResponse.result.files.length > 0) {
+                        searchFolders.push(...folderResponse.result.files.map(f => f.id));
+                        console.log(`폴더 발견: ${folderResponse.result.files.map(f => f.name).join(', ')}`);
+                    }
+                }
+                
+                // 2단계: 각 폴더에서 파일 검색
+                const searchPatterns = [
+                    `trade_${date}`,           // trade_2025-09-16
+                    `trade-${date}`,           // trade-2025-09-16
+                    `${date}`,                 // 2025-09-16
+                    `trade_${date.replace(/-/g, '')}`, // trade_20250916
+                ];
+                
+                for (const folderId of searchFolders) {
+                    console.log(`폴더 ${folderId}에서 검색 중...`);
+                    
+                    for (const pattern of searchPatterns) {
+                        const parentQuery = folderId === 'root' ? '' : ` and '${folderId}' in parents`;
+                        const response = await gapi.client.drive.files.list({
+                            q: `name contains '${pattern}' and (name contains '.csv' or name contains '.parquet')${parentQuery}`,
+                            spaces: 'drive',
+                            fields: 'files(id, name, mimeType, size, modifiedTime, parents)',
+                            orderBy: 'modifiedTime desc'
+                        });
+                        
+                        if (response.result.files && response.result.files.length > 0) {
+                            foundFiles.push(...response.result.files);
+                            console.log(`패턴 "${pattern}"으로 ${response.result.files.length}개 파일 발견`);
+                            break;
+                        }
+                    }
+                    
+                    if (foundFiles.length > 0) break;
+                }
+                
+                // 3단계: 파일이 없으면 전체 Drive에서 거래 관련 파일 찾기
+                if (foundFiles.length === 0) {
+                    console.log('특정 날짜 파일을 찾지 못함. 전체 Drive에서 거래 파일 검색...');
+                    const allFilesResponse = await gapi.client.drive.files.list({
+                        q: `(name contains 'trade' or name contains 'csv' or name contains '거래') and (name contains '.csv' or name contains '.parquet')`,
+                        spaces: 'drive',
+                        fields: 'files(id, name, mimeType, size, modifiedTime, parents)',
+                        orderBy: 'modifiedTime desc',
+                        pageSize: 50
+                    });
+                    
+                    if (allFilesResponse.result.files && allFilesResponse.result.files.length > 0) {
+                        console.log('Drive에서 발견한 모든 거래 관련 파일들:');
+                        
+                        // 폴더 정보도 함께 표시
+                        for (const file of allFilesResponse.result.files) {
+                            let folderInfo = '';
+                            if (file.parents && file.parents.length > 0) {
+                                try {
+                                    const parentResponse = await gapi.client.drive.files.get({
+                                        fileId: file.parents[0],
+                                        fields: 'name'
+                                    });
+                                    folderInfo = ` (폴더: ${parentResponse.result.name})`;
+                                } catch (e) {
+                                    folderInfo = ' (루트 폴더)';
+                                }
+                            }
+                            console.log(`- ${file.name} (${file.mimeType})${folderInfo}`);
+                        }
+                        
+                        // 가장 최근의 CSV 파일 사용
+                        const csvFile = allFilesResponse.result.files.find(f => 
+                            f.mimeType === 'text/csv' || f.name.endsWith('.csv')
+                        );
+                        if (csvFile) {
+                            foundFiles = [csvFile];
+                            console.log(`대체 파일 사용: ${csvFile.name}`);
+                        }
+                    }
+                }
+                
+                if (foundFiles.length === 0) {
+                    console.log(`${date} 관련 파일을 찾을 수 없습니다. 샘플 데이터를 생성합니다.`);
+                    alert('Drive에서 거래 데이터 파일을 찾을 수 없습니다. 파일명이나 폴더 구조를 확인해주세요.');
+                    return generateSampleTradeData(date, 100);
+                }
+                
+                const file = foundFiles[0];
+                console.log(`파일 로드 시작: ${file.name} (${file.mimeType}, ${file.size} bytes)`);
+                
+                // 파일 내용 다운로드
+                const fileResponse = await gapi.client.drive.files.get({
+                    fileId: file.id,
+                    alt: 'media'
+                });
+                
+                if (file.mimeType === 'text/csv' || file.name.endsWith('.csv')) {
+                    const csvData = fileResponse.body;
+                    console.log('CSV 데이터 파싱 시작...');
+                    
+                    const parsedData = Papa.parse(csvData, {
+                        header: true,
+                        dynamicTyping: true,
+                        skipEmptyLines: true,
+                        delimiter: ',',
+                        encoding: 'UTF-8'
+                    });
+                    
+                    if (parsedData.errors && parsedData.errors.length > 0) {
+                        console.warn('CSV 파싱 경고:', parsedData.errors);
+                    }
+                    
+                    console.log(`${file.name} 데이터 로드 완료: ${parsedData.data.length<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -1071,7 +1213,220 @@
                 if (totalTrades.length > 0) {
                     tradeData.push(...totalTrades);
                     updateMetrics();
-                    updateMainStatus('dataStatus', 'success', `${totalTrades.length}건 로드 완료`);
+                    updateMainStatus('dataStatus', 'success', `${totalTrades.length        // 정확한 폴더 구조를 기반으로 한 파일 검색
+        async function loadParquetFile(date) {
+            if (!gapiInitialized || gapi.client.getToken() === null) {
+                throw new Error('Google 로그인이 필요합니다.');
+            }
+            
+            try {
+                console.log(`${date} 파일 검색 시작...`);
+                
+                // 1단계: 메인 폴더 찾기 - "아르테일_거래어뷰징_시스템"
+                console.log('메인 폴더 검색 중...');
+                const mainFolderResponse = await gapi.client.drive.files.list({
+                    q: `name contains '아르테일' and mimeType='application/vnd.google-apps.folder'`,
+                    spaces: 'drive',
+                    fields: 'files(id, name)'
+                });
+                
+                let mainFolderId = null;
+                if (mainFolderResponse.result.files && mainFolderResponse.result.files.length > 0) {
+                    mainFolderId = mainFolderResponse.result.files[0].id;
+                    console.log(`메인 폴더 발견: ${mainFolderResponse.result.files[0].name} (ID: ${mainFolderId})`);
+                } else {
+                    throw new Error('아르테일_거래어뷰징_시스템 폴더를 찾을 수 없습니다.');
+                }
+                
+                // 2단계: "1_일자별_거래데이터" 폴더 찾기
+                console.log('거래데이터 폴더 검색 중...');
+                const dataFolderResponse = await gapi.client.drive.files.list({
+                    q: `name contains '1_일자별_거래데이터' and mimeType='application/vnd.google-apps.folder' and '${mainFolderId}' in parents`,
+                    spaces: 'drive',
+                    fields: 'files(id, name)'
+                });
+                
+                let dataFolderId = null;
+                if (dataFolderResponse.result.files && dataFolderResponse.result.files.length > 0) {
+                    dataFolderId = dataFolderResponse.result.files[0].id;
+                    console.log(`거래데이터 폴더 발견: ${dataFolderResponse.result.files[0].name} (ID: ${dataFolderId})`);
+                } else {
+                    throw new Error('1_일자별_거래데이터 폴더를 찾을 수 없습니다.');
+                }
+                
+                // 3단계: 해당 날짜 파일 검색
+                console.log(`${date} 파일 검색 중...`);
+                const fileName = `trade_${date}`;
+                const fileResponse = await gapi.client.drive.files.list({
+                    q: `name contains '${fileName}' and '${dataFolderId}' in parents`,
+                    spaces: 'drive',
+                    fields: 'files(id, name, mimeType, size, modifiedTime)',
+                    orderBy: 'modifiedTime desc'
+                });
+                
+                let foundFiles = fileResponse.result.files || [];
+                
+                if (foundFiles.length === 0) {
+                    // 4단계: 해당 폴더의 모든 파일 나열
+                    console.log('특정 날짜 파일을 찾지 못함. 폴더 내 모든 파일 확인...');
+                    const allFilesResponse = await gapi.client.drive.files.list({
+                        q: `'${dataFolderId}' in parents`,
+                        spaces: 'drive',
+                        fields: 'files(id, name, mimeType, size, modifiedTime)',
+                        orderBy: 'modifiedTime desc'
+                    });
+                    
+                    if (allFilesResponse.result.files && allFilesResponse.result.files.length > 0) {
+                        console.log('1_일자별_거래데이터 폴더에 있는 파일들:');
+                        allFilesResponse.result.files.forEach(file => {
+                            console.log(`- ${file.name} (${file.mimeType})`);
+                        });
+                        
+                        // 날짜 포함된 파일 우선 검색
+                        const dateFiles = allFilesResponse.result.files.filter(f => 
+                            f.name.includes(date) || f.name.includes(date.replace(/-/g, ''))
+                        );
+                        
+                        if (dateFiles.length > 0) {
+                            foundFiles = dateFiles;
+                            console.log(`날짜 매칭 파일 발견: ${dateFiles.map(f => f.name).join(', ')}`);
+                        } else {
+                            // 가장 최근 파일 사용
+                            foundFiles = [allFilesResponse.result.files[0]];
+                            console.log(`최근 파일 사용: ${foundFiles[0].name}`);
+                        }
+                    }
+                }
+                
+                if (foundFiles.length === 0) {
+                    console.log(`${date} 관련 파일을 찾을 수 없습니다. 샘플 데이터를 생성합니다.`);
+                    alert(`거래데이터 폴더에서 ${date} 파일을 찾을 수 없습니다.`);
+                    return generateSampleTradeData(date, 100);
+                }
+                
+                const file = foundFiles[0];
+                console.log(`파일 로드 시작: ${file.name} (${file.mimeType}, ${file.size} bytes)`);
+                
+                // 5단계: 파일 내용 다운로드
+                const fileContentResponse = await gapi.client.drive.files.get({
+                    fileId: file.id,
+                    alt: 'media'
+                });
+                
+                if (file.name.endsWith('.csv')) {
+                    // CSV 파일 처리
+                    const csvData = fileContentResponse.body;
+                    console.log('CSV 데이터 파싱 시작...');
+                    
+                    const parsedData = Papa.parse(csvData, {
+                        header: true,
+                        dynamicTyping: true,
+                        skipEmptyLines: true,
+                        delimiter: ',',
+                        encoding: 'UTF-8'
+                    });
+                    
+                    if (parsedData.errors && parsedData.errors.length > 0) {
+                        console.warn('CSV 파싱 경고:', parsedData.errors);
+                    }
+                    
+                    console.log(`${file.name} 데이터 로드 완료: ${parsedData.data.length}건`);
+                    console.log('첫 번째 데이터 샘플:', parsedData.data[0]);
+                    
+                    return parsedData.data;
+                    
+                } else if (file.name.endsWith('.parquet')) {
+                    // 파케이 파일 처리 (현재는 지원하지 않음)
+                    console.log('파케이 파일이 발견되었지만 현재 브라우저에서는 직접 읽을 수 없습니다.');
+                    alert(`${file.name} 파케이 파일이 발견되었습니다. CSV로 변환하여 같은 폴더에 업로드하거나, 파케이 파일을 CSV로 변환해주세요.`);
+                    return generateSampleTradeData(date, 100);
+                    
+                } else {
+                    console.log('지원하지 않는 파일 형식입니다.');
+                    return generateSampleTradeData(date, 100);
+                }
+                
+            } catch (error) {
+                console.error(`${date} 파일 로드 실패:`, error);
+                
+                if (error.status === 401) {
+                    updateMainStatus('dataStatus', 'error', '인증 만료됨 - 다시 로그인해주세요');
+                    signOutGoogle();
+                } else if (error.status === 403) {
+                    updateMainStatus('dataStatus', 'error', '파일 접근 권한이 없습니다');
+                } else {
+                    updateMainStatus('dataStatus', 'error', `파일 로드 오류: ${error.message}`);
+                }
+                
+                alert(`오류: ${error.message}`);
+                return generateSampleTradeData(date, 100);
+            }
+        }
+
+        // 참고 데이터 로드 함수도 폴더 구조에 맞게 수정
+        async function loadReferenceData(fileName) {
+            if (!gapiInitialized || gapi.client.getToken() === null) {
+                throw new Error('Google 로그인이 필요합니다.');
+            }
+
+            try {
+                // 메인 폴더 찾기
+                const mainFolderResponse = await gapi.client.drive.files.list({
+                    q: `name contains '아르테일' and mimeType='application/vnd.google-apps.folder'`,
+                    spaces: 'drive',
+                    fields: 'files(id, name)'
+                });
+
+                if (!mainFolderResponse.result.files || mainFolderResponse.result.files.length === 0) {
+                    throw new Error('아르테일_거래어뷰징_시스템 폴더를 찾을 수 없습니다.');
+                }
+
+                const mainFolderId = mainFolderResponse.result.files[0].id;
+
+                // 2_참고데이터 폴더 찾기
+                const refFolderResponse = await gapi.client.drive.files.list({
+                    q: `name contains '2_참고데이터' and mimeType='application/vnd.google-apps.folder' and '${mainFolderId}' in parents`,
+                    spaces: 'drive',
+                    fields: 'files(id, name)'
+                });
+
+                if (!refFolderResponse.result.files || refFolderResponse.result.files.length === 0) {
+                    throw new Error('2_참고데이터 폴더를 찾을 수 없습니다.');
+                }
+
+                const refFolderId = refFolderResponse.result.files[0].id;
+
+                // 파일 검색
+                const fileResponse = await gapi.client.drive.files.list({
+                    q: `name contains '${fileName}' and '${refFolderId}' in parents`,
+                    spaces: 'drive',
+                    fields: 'files(id, name, mimeType)',
+                    orderBy: 'modifiedTime desc'
+                });
+
+                if (!fileResponse.result.files || fileResponse.result.files.length === 0) {
+                    throw new Error(`${fileName} 파일을 2_참고데이터 폴더에서 찾을 수 없습니다.`);
+                }
+
+                const file = fileResponse.result.files[0];
+                console.log(`참고데이터 로드: ${file.name}`);
+
+                // 파일 내용 다운로드
+                const contentResponse = await gapi.client.drive.files.get({
+                    fileId: file.id,
+                    alt: 'media'
+                });
+
+                return {
+                    name: file.name,
+                    content: contentResponse.body
+                };
+
+            } catch (error) {
+                console.error(`참고데이터 로드 실패:`, error);
+                throw error;
+            }
+        } 로드 완료`);
                     
                     document.getElementById('loadResults').innerHTML = `
                         <div class="tag info">✅ ${totalTrades.length}건의 새로운 거래 데이터가 로드되었습니다.</div>
@@ -1092,28 +1447,78 @@
             }
         }
 
-        // 실제 Google Drive에서 파케이 파일 로드
+        // 실제 Google Drive에서 파일 로드 (개선된 버전)
         async function loadParquetFile(date) {
             if (!gapiInitialized || gapi.client.getToken() === null) {
                 throw new Error('Google 로그인이 필요합니다.');
             }
             
             try {
-                const fileName = `trade_${date}`;
-                const response = await gapi.client.drive.files.list({
-                    q: `name contains '${fileName}'`,
-                    spaces: 'drive',
-                    fields: 'files(id, name, mimeType)'
-                });
+                console.log(`${date} 파일 검색 시작...`);
                 
-                if (response.result.files.length === 0) {
-                    console.log(`${date} 파일을 찾을 수 없습니다.`);
+                // 여러 파일명 패턴으로 검색
+                const searchPatterns = [
+                    `trade_${date}`,           // trade_2025-09-16
+                    `trade-${date}`,           // trade-2025-09-16
+                    `${date}`,                 // 2025-09-16
+                    `trade_${date.replace(/-/g, '')}`, // trade_20250916
+                ];
+                
+                let foundFiles = [];
+                
+                // 각 패턴으로 검색
+                for (const pattern of searchPatterns) {
+                    const response = await gapi.client.drive.files.list({
+                        q: `name contains '${pattern}' and (name contains '.csv' or name contains '.parquet')`,
+                        spaces: 'drive',
+                        fields: 'files(id, name, mimeType, size, modifiedTime)',
+                        orderBy: 'modifiedTime desc'
+                    });
+                    
+                    if (response.result.files && response.result.files.length > 0) {
+                        foundFiles.push(...response.result.files);
+                        console.log(`패턴 "${pattern}"으로 ${response.result.files.length}개 파일 발견`);
+                        break; // 첫 번째 성공한 패턴으로 종료
+                    }
+                }
+                
+                // 파일이 없으면 전체 파일 목록 확인
+                if (foundFiles.length === 0) {
+                    console.log('특정 날짜 파일을 찾지 못함. 전체 거래 파일 검색...');
+                    const allFilesResponse = await gapi.client.drive.files.list({
+                        q: `(name contains 'trade' or name contains 'csv') and (name contains '.csv' or name contains '.parquet')`,
+                        spaces: 'drive',
+                        fields: 'files(id, name, mimeType, size, modifiedTime)',
+                        orderBy: 'modifiedTime desc',
+                        pageSize: 20
+                    });
+                    
+                    if (allFilesResponse.result.files && allFilesResponse.result.files.length > 0) {
+                        console.log('사용 가능한 파일들:');
+                        allFilesResponse.result.files.forEach(file => {
+                            console.log(`- ${file.name} (${file.mimeType})`);
+                        });
+                        
+                        // 첫 번째 CSV 파일 사용
+                        const csvFile = allFilesResponse.result.files.find(f => 
+                            f.mimeType === 'text/csv' || f.name.endsWith('.csv')
+                        );
+                        if (csvFile) {
+                            foundFiles = [csvFile];
+                            console.log(`대체 파일 사용: ${csvFile.name}`);
+                        }
+                    }
+                }
+                
+                if (foundFiles.length === 0) {
+                    console.log(`${date} 관련 파일을 찾을 수 없습니다. 샘플 데이터를 생성합니다.`);
                     return generateSampleTradeData(date, 100);
                 }
                 
-                const file = response.result.files[0];
-                console.log(`파일 발견: ${file.name} (${file.mimeType})`);
+                const file = foundFiles[0];
+                console.log(`파일 발견: ${file.name} (${file.mimeType}, ${file.size} bytes)`);
                 
+                // 파일 내용 다운로드
                 const fileResponse = await gapi.client.drive.files.get({
                     fileId: file.id,
                     alt: 'media'
@@ -1121,25 +1526,44 @@
                 
                 if (file.mimeType === 'text/csv' || file.name.endsWith('.csv')) {
                     const csvData = fileResponse.body;
+                    console.log('CSV 데이터 파싱 시작...');
+                    
                     const parsedData = Papa.parse(csvData, {
                         header: true,
                         dynamicTyping: true,
-                        skipEmptyLines: true
+                        skipEmptyLines: true,
+                        delimiter: ',',
+                        encoding: 'UTF-8'
                     });
                     
-                    console.log(`${date} 데이터 로드 완료: ${parsedData.data.length}건`);
+                    if (parsedData.errors && parsedData.errors.length > 0) {
+                        console.warn('CSV 파싱 경고:', parsedData.errors);
+                    }
+                    
+                    console.log(`${file.name} 데이터 로드 완료: ${parsedData.data.length}건`);
+                    console.log('첫 번째 데이터 샘플:', parsedData.data[0]);
+                    
                     return parsedData.data;
+                } else if (file.name.endsWith('.parquet')) {
+                    console.log('파케이 파일은 현재 지원하지 않습니다. CSV로 변환 후 업로드해주세요.');
+                    return generateSampleTradeData(date, 100);
                 } else {
-                    console.log('파케이 파일은 CSV로 변환 후 업로드해주세요.');
+                    console.log('지원하지 않는 파일 형식입니다.');
                     return generateSampleTradeData(date, 100);
                 }
                 
             } catch (error) {
                 console.error(`${date} 파일 로드 실패:`, error);
+                
                 if (error.status === 401) {
                     updateMainStatus('dataStatus', 'error', '인증 만료됨 - 다시 로그인해주세요');
                     signOutGoogle();
+                } else if (error.status === 403) {
+                    updateMainStatus('dataStatus', 'error', '파일 접근 권한이 없습니다');
+                } else {
+                    updateMainStatus('dataStatus', 'error', `파일 로드 오류: ${error.message}`);
                 }
+                
                 return generateSampleTradeData(date, 100);
             }
         }
