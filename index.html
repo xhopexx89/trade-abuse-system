@@ -716,7 +716,20 @@
         });
         
         // Google API 초기화
-        async function initializeGoogleAPI() {
+        function initializeGoogleAPI() {
+            // gapi가 로드될 때까지 기다리기
+            function waitForGapi() {
+                if (typeof gapi !== 'undefined') {
+                    loadGoogleAPI();
+                } else {
+                    setTimeout(waitForGapi, 100);
+                }
+            }
+            
+            waitForGapi();
+        }
+        
+        async function loadGoogleAPI() {
             try {
                 await new Promise((resolve) => {
                     gapi.load('client:auth2', resolve);
