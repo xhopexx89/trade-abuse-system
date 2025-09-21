@@ -16,6 +16,7 @@
             </div>
             <div class="status-item">
                 <button class="btn" onclick="signInGoogle()" id="googleSignInBtn" disabled>Google API 로딩 중...</button>
+                <button class="btn danger" onclick="signOutGoogle()" id="googleSignOutBtn" style="display: none;">로그아웃</button>
             </div>
         </div><!DOCTYPE html>
 <html lang="ko">
@@ -25,25 +26,8 @@
     <title>아르테일 거래 어뷰징 탐지 시스템</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <script>
-        // Google API 동적 로딩
-        function loadGoogleAPI() {
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = 'https://apis.google.com/js/api.js';
-                script.onload = () => {
-                    // gapi가 로드되었는지 확인
-                    if (typeof gapi !== 'undefined') {
-                        resolve();
-                    } else {
-                        reject(new Error('gapi 로드 실패'));
-                    }
-                };
-                script.onerror = () => reject(new Error('Google API 스크립트 로드 실패'));
-                document.head.appendChild(script);
-            });
-        }
-    </script>
+    <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
     <style>
         * {
             margin: 0;
@@ -707,14 +691,125 @@
     </div>
 
     <script>
-        // Google API 설정 - 여기에 발급받은 키들을 입력하세요
-        const API_KEY = 'AIzaSyAHsYN91Ul4TSRkR9ILwyugAuBlTq0BFpQ'; // Google Cloud Console에서 발급받은 API 키
-        const CLIENT_ID = '248542083622-3k0q7552uso1006bffs68sb27ujidd1f.apps.googleusercontent.com'; // OAuth 클라이언트 ID
+        // Google API 설정 - 여기에 실제 키들을 입력하세요
+        const API_KEY = 'AIzaSyAHsYN91Ul4TSRkR9ILwyugAuBlTq0BFpQ'; // 실제 API 키
+        const CLIENT_ID = '248542083622-3k0q7552uso1006bffs68sb27ujidd1f.apps.googleusercontent.com'; // 실제 클라이언트 ID
         const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
         const SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/spreadsheets';
         
         let gapi;
+        let google;
+        let tokenClient;
         let isGoogleApiLoaded = false;
+        let gapiInited = false;
+        let gisInited = false;
+        
+        // gapi 로드 완료 콜백
+        async function gapiLoaded() {
+            try {
+                await gapi.load('client', initializeGapi);
+            } catch (error) {
+                console.error('GAPI 로드 실패:', error);
+                updateStatus('dataStatus', 'error', 'Google API 로드 실패');
+            }
+        }
+        
+        // gapi.client 초기화
+        async function initializeGapi() {
+            try {
+                await gapi.client.init({
+                    apiKey: API_KEY,
+                    discoveryDocs: [DISCOVERY_DOC],
+                });
+                gapiInited = true;
+                maybeEnableButtons();
+                updateStatus('dataStatus', 'loading', 'Google 인증 서비스 로딩 중...');
+            } catch (error) {
+                console.error('GAPI 초기화 실패:', error);
+                updateStatus('dataStatus', 'error', 'Google API 초기화 실패');
+            }
+        }
+        
+        // Google Identity Services 로드 완료 콜백
+        function gisLoaded() {
+            try {
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID,
+                    scope: SCOPES,
+                    callback: '', // 나중에 정의
+                });
+                gisInited = true;
+                maybeEnableButtons();
+                updateStatus('dataStatus', 'loading', 'Google 서비스 준비 중...');
+            } catch (error) {
+                console.error('GIS 로드 실패:', error);
+                updateStatus('dataStatus', 'error', 'Google 인증 서비스 로드 실패');
+            }
+        }
+        
+        // 모든 API가 로드되었을 때 버튼 활성화
+        function maybeEnableButtons() {
+            if (gapiInited && gisInited) {
+                isGoogleApiLoaded = true;
+                updateStatus('dataStatus', 'success', 'Google Drive 연결 준비 완료');
+                
+                const loginBtn = document.getElementById('googleSignInBtn');
+                loginBtn.disabled = false;
+                loginBtn.textContent = '🔑 Google 로그인';
+                
+                // 기존 토큰이 있는지 확인
+                if (gapi.client.getToken() !== null) {
+                    updateStatus('dataStatus', 'success', 'Google Drive 연결됨');
+                    loginBtn.textContent = '✅ 로그인됨';
+                }
+            }
+        }
+        
+        // Google 로그인
+        function signInGoogle() {
+            if (!isGoogleApiLoaded) {
+                alert('Google API가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.');
+                return;
+            }
+            
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) {
+                    updateStatus('dataStatus', 'error', `로그인 실패: ${resp.error}`);
+                    throw (resp);
+                }
+                
+                updateStatus('dataStatus', 'success', 'Google Drive 연결됨');
+                const loginBtn = document.getElementById('googleSignInBtn');
+                const logoutBtn = document.getElementById('googleSignOutBtn');
+                loginBtn.textContent = '✅ 로그인됨';
+                loginBtn.style.display = 'none';
+                logoutBtn.style.display = 'inline-block';
+            };
+            
+            if (gapi.client.getToken() === null) {
+                // 새로운 토큰 요청
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            } else {
+                // 기존 토큰으로 새로운 토큰 요청
+                tokenClient.requestAccessToken({prompt: ''});
+            }
+        }
+        
+        // Google 로그아웃
+        function signOutGoogle() {
+            const token = gapi.client.getToken();
+            if (token !== null) {
+                google.accounts.oauth2.revoke(token.access_token);
+                gapi.client.setToken('');
+                updateStatus('dataStatus', 'loading', 'Google 로그인 필요');
+                
+                const loginBtn = document.getElementById('googleSignInBtn');
+                const logoutBtn = document.getElementById('googleSignOutBtn');
+                loginBtn.textContent = '🔑 Google 로그인';
+                loginBtn.style.display = 'inline-block';
+                logoutBtn.style.display = 'none';
+            }
+        }
         
         // 전역 변수
         let tradeData = [];
@@ -746,64 +841,15 @@
             updateExchangeRateDisplay();
             updateOutlierDisplay();
             updateVariationDisplay();
-            initializeGoogleAPI();
-        });
-        
-        // Google API 초기화 (동적 로딩 방식)
-        async function initializeGoogleAPI() {
-            try {
-                updateStatus('dataStatus', 'loading', 'Google API 스크립트 로딩 중...');
-                
-                // Google API 스크립트 동적 로딩
-                await loadGoogleAPI();
-                
-                updateStatus('dataStatus', 'loading', 'Google API 초기화 중...');
-                
-                // gapi.load를 Promise로 래핑
-                await new Promise((resolve, reject) => {
-                    gapi.load('client:auth2', {
-                        callback: resolve,
-                        onerror: reject
-                    });
-                });
-                
-                updateStatus('dataStatus', 'loading', 'Google Client 설정 중...');
-                
-                // gapi.client.init 실행
-                await gapi.client.init({
-                    apiKey: API_KEY,
-                    clientId: CLIENT_ID,
-                    discoveryDocs: [DISCOVERY_DOC],
-                    scope: SCOPES
-                });
-                
-                isGoogleApiLoaded = true;
-                updateStatus('dataStatus', 'success', 'Google Drive 연결 준비 완료');
-                
-                // 로그인 버튼 활성화
-                const loginBtn = document.getElementById('googleSignInBtn');
-                loginBtn.disabled = false;
-                loginBtn.textContent = '🔑 Google 로그인';
-                
-                // 로그인 상태 확인
-                const authInstance = gapi.auth2.getAuthInstance();
-                if (authInstance.isSignedIn.get()) {
-                    updateStatus('dataStatus', 'success', 'Google Drive 연결됨');
-                    loginBtn.textContent = '✅ 로그인됨';
-                } else {
-                    updateStatus('dataStatus', 'loading', 'Google 로그인 필요');
-                }
-                
-            } catch (error) {
-                console.error('Google API 초기화 실패:', error);
-                updateStatus('dataStatus', 'error', `Google API 연결 실패: ${error.message}`);
-                
-                // 로그인 버튼 비활성화 유지
-                const loginBtn = document.getElementById('googleSignInBtn');
-                loginBtn.disabled = true;
-                loginBtn.textContent = 'API 연결 실패';
+            
+            // API 키 확인
+            if (API_KEY === 'YOUR_API_KEY_HERE' || CLIENT_ID === 'YOUR_CLIENT_ID_HERE') {
+                updateStatus('dataStatus', 'error', 'API 키가 설정되지 않음');
+                alert('Google Cloud Console에서 API 키와 클라이언트 ID를 발급받아 코드에 입력해주세요.');
+            } else {
+                updateStatus('dataStatus', 'loading', 'Google API 로딩 중...');
             }
-        }
+        });
         
         // Google 로그인
         async function signInGoogle() {
@@ -822,23 +868,19 @@
             }
         }
         
-        // 실제 Google Drive에서 파케이 파일 로드
+        // 실제 Google Drive에서 파케이 파일 로드 (새로운 방식)
         async function loadParquetFile(date) {
-            if (!isGoogleApiLoaded) {
-                throw new Error('Google API가 초기화되지 않았습니다.');
-            }
-            
-            const authInstance = gapi.auth2.getAuthInstance();
-            if (!authInstance.isSignedIn.get()) {
-                await signInGoogle();
+            if (!isGoogleApiLoaded || gapi.client.getToken() === null) {
+                throw new Error('Google 로그인이 필요합니다.');
             }
             
             try {
-                // 파일 검색: trade_YYYY-MM-DD.parquet
-                const fileName = `trade_${date}.parquet`;
+                // 파일 검색: trade_YYYY-MM-DD.parquet 또는 .csv
+                const fileName = `trade_${date}`;
                 const response = await gapi.client.drive.files.list({
-                    q: `name='${fileName}'`,
-                    spaces: 'drive'
+                    q: `name contains '${fileName}'`,
+                    spaces: 'drive',
+                    fields: 'files(id, name, mimeType)'
                 });
                 
                 if (response.result.files.length === 0) {
@@ -846,24 +888,38 @@
                     return [];
                 }
                 
-                const fileId = response.result.files[0].id;
+                const file = response.result.files[0];
+                console.log(`파일 발견: ${file.name} (${file.mimeType})`);
                 
                 // 파일 다운로드
                 const fileResponse = await gapi.client.drive.files.get({
-                    fileId: fileId,
+                    fileId: file.id,
                     alt: 'media'
                 });
                 
-                // 파케이 파일을 CSV로 변환하는 과정이 필요합니다
-                // 실제로는 파케이 파일을 직접 읽을 수 없으므로
-                // 미리 CSV로 변환된 파일을 업로드하거나
-                // 별도의 변환 과정이 필요합니다
-                
-                console.log(`${date} 데이터 로드 완료`);
-                return generateSampleTradeData(date, 100); // 임시로 샘플 데이터 반환
+                // CSV 파일인 경우 파싱
+                if (file.mimeType === 'text/csv' || file.name.endsWith('.csv')) {
+                    const csvData = fileResponse.body;
+                    const parsedData = Papa.parse(csvData, {
+                        header: true,
+                        dynamicTyping: true,
+                        skipEmptyLines: true
+                    });
+                    
+                    console.log(`${date} 데이터 로드 완료: ${parsedData.data.length}건`);
+                    return parsedData.data;
+                } else {
+                    // 파케이 파일은 현재 브라우저에서 직접 읽기 어려움
+                    console.log('파케이 파일은 CSV로 변환 후 업로드해주세요.');
+                    return generateSampleTradeData(date, 100); // 임시 샘플 데이터
+                }
                 
             } catch (error) {
                 console.error(`${date} 파일 로드 실패:`, error);
+                if (error.status === 401) {
+                    updateStatus('dataStatus', 'error', '인증 만료됨 - 다시 로그인해주세요');
+                    signOutGoogle();
+                }
                 return [];
             }
         }
